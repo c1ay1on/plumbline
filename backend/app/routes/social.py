@@ -212,13 +212,20 @@ async def list_connections(user: dict = Depends(require_user)):
 
 @router.get("/config")
 async def social_config(user: dict = Depends(require_user)):
+    def _val(k): return os.getenv(k, "").strip()
+    def _real(k):  # an ID/secret must not be a URL
+        v = _val(k)
+        return bool(v) and not v.lower().startswith("http")
+    def _ok(cid, secret, redirect):
+        return _real(cid) and (secret is None or _real(secret)) and bool(_val(redirect))
+
     ready = {
-        "linkedin": all(os.getenv(key, "").strip() for key in ("LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET", "LINKEDIN_REDIRECT_URI")),
-        "facebook": all(os.getenv(key, "").strip() for key in ("META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI")),
-        "instagram": all(os.getenv(key, "").strip() for key in ("META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI")),
-        "threads": all(os.getenv(key, "").strip() for key in ("THREADS_APP_ID", "THREADS_APP_SECRET", "THREADS_REDIRECT_URI")),
-        "x": all(os.getenv(key, "").strip() for key in ("X_CLIENT_ID", "X_REDIRECT_URI")),
-        "youtube": all(os.getenv(key, "").strip() for key in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI")),
+        "linkedin": _ok("LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET", "LINKEDIN_REDIRECT_URI"),
+        "facebook": _ok("META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"),
+        "instagram": _ok("META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"),
+        "threads": _ok("THREADS_APP_ID", "THREADS_APP_SECRET", "THREADS_REDIRECT_URI"),
+        "x": _ok("X_CLIENT_ID", None, "X_REDIRECT_URI"),
+        "youtube": _ok("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI"),
     }
     return {"platforms": ready}
 
@@ -235,8 +242,12 @@ async def start_connect(platform: str, user: dict = Depends(require_user)):
         insert_state(state, platform, user["id"])
     elif platform in {"facebook", "instagram"}:
         client_id, _, redirect_uri = config_for("meta")
-        scopes = "pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement,pages_read_user_content,instagram_basic,instagram_content_publish,instagram_manage_comments,pages_manage_metadata"
-        params = {"client_id": client_id, "redirect_uri": redirect_uri, "state": state, "response_type": "code", "scope": scopes}
+        params = {"client_id": client_id, "redirect_uri": redirect_uri, "state": state, "response_type": "code"}
+        config_id = os.getenv("META_CONFIG_ID", "").strip()
+        if config_id:
+            params.update({"config_id": config_id, "override_default_response_type": "true"})
+        else:  # classic Facebook Login
+            params["scope"] = "pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement,pages_read_user_content,instagram_basic,instagram_content_publish,instagram_manage_comments"
         url = f"https://www.facebook.com/{META_VERSION}/dialog/oauth?" + urlencode(params)
         insert_state(state, "meta", user["id"])
     elif platform == "threads":
@@ -307,7 +318,10 @@ async def oauth_callback(platform: str, code: str | None = None, state: str | No
         client_id, client_secret, redirect_uri = config_for("threads")
         token_data = await request_json("POST", "https://graph.threads.net/oauth/access_token", data={"client_id": client_id, "client_secret": client_secret, "grant_type": "authorization_code", "redirect_uri": redirect_uri, "code": code})
         short_token = token_data["access_token"]
-        long_data = await request_json("GET", "https://graph.threads.net/access_token", params={"grant_type": "th_exchange_token", "client_secret": client_secret, "access_token": short_token})
+        long_data = await request_json("GET", f"{graph_base}/oauth/access_token", params={
+            "grant_type": "fb_exchange_token", "client_id": client_id,
+            "client_secret": client_secret, "fb_exchange_token": user_token})
+        user_token = long_data.get("access_token", user_token)
         token = long_data.get("access_token", short_token)
         expires_at = token_expiry(long_data)
         profile = await request_json("GET", "https://graph.threads.net/v1.0/me", token=token, params={"fields": "id,username,name"})
