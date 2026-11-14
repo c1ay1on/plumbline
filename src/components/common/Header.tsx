@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Shield, PlusSquare, CheckSquare, MessageSquare, TrendingUp, Share2, BookOpen, User, Menu, X, Server, LogOut, Sparkles, Building2 } from 'lucide-react';
+import { PlusSquare, CheckSquare, MessageSquare, TrendingUp, Share2, BookOpen, User, Menu, X, Server, LogOut, Sparkles, Building2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { groqService } from '../../services/ai/groqService';
@@ -58,7 +58,7 @@ export const Header: React.FC = () => {
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-8">
             <NavLink to="/app/home" className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[#0A4A3D] flex items-center justify-center text-white"><Shield className="w-5 h-5" /></div>
+              <img src="/logo.png" alt="C:/Users/ADMIN/Downloads/WhatsApp .png" className="w-8 h-8 object-contain" />
               <div className="flex flex-col"><span className="text-xl font-bold text-[#12201C] leading-none">Plumbline</span><span className="text-[10px] text-[#68756F] font-medium">Brand Governance</span></div>
             </NavLink>
             <nav className="hidden lg:flex items-center gap-1">

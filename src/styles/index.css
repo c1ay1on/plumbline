@@ -9,6 +9,54 @@
   }
 }
 
+button:not(:disabled),
+a[href][class*="rounded"],
+[role="tab"],
+[role="button"],
+[class~="shadow-plumb-subtle"],
+[class~="shadow-plumb-card"] {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  button:not(:disabled):hover,
+  a[href][class*="rounded"]:hover,
+  [role="tab"]:hover,
+  [role="button"]:hover {
+    transform: translateY(-1px);
+  }
+
+  button:not(:disabled):active,
+  a[href][class*="rounded"]:active,
+  [role="tab"]:active,
+  [role="button"]:active {
+    transform: translateY(0);
+  }
+
+  [class~="shadow-plumb-subtle"]:hover,
+  [class~="shadow-plumb-card"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(18, 32, 28, 0.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled),
+  a[href][class*="rounded"],
+  [role="tab"],
+  [role="button"],
+  [class~="shadow-plumb-subtle"],
+  [class~="shadow-plumb-card"] {
+    transition: none;
+    transform: none;
+  }
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
