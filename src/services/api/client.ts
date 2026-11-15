@@ -29,6 +29,11 @@ export interface ApiUser {
   lastLogin: string;
 }
 
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) { super(message); this.status = status; }
+}
+
 class ApiClient {
   getToken(): string {
     return localStorage.getItem(TOKEN_KEY) || '';
@@ -57,12 +62,12 @@ class ApiClient {
     try {
       response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
     } catch {
-      throw new Error('Could not reach Plumbline API. Start the backend at http://localhost:8000 and try again.');
+      throw new ApiError('Could not reach Plumbline API. It may be waking up; try again in a minute.', 0);
     }
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       const detail = payload.detail || payload.message || `Request failed (${response.status}).`;
-      throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+      throw new ApiError(typeof detail === 'string' ? detail : JSON.stringify(detail), response.status);
     }
     return payload as T;
   }

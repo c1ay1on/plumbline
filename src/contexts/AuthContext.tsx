@@ -44,9 +44,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         workspaceStorage.setCurrentUser(parsed);
         setCurrentUser(parsed);
         setIsAuthenticated(true);
-      }).catch(() => {
-        apiClient.clearSession();
-        if (alive) { setCurrentUser(guestUser); setIsAuthenticated(false); }
+      }).catch((err) => {
+        // Only log out when the server says the session is invalid, not on network errors
+        if (err?.status === 401) {
+          apiClient.clearSession();
+          if (alive) { setCurrentUser(guestUser); setIsAuthenticated(false); }
+        }
       });
     }
     return () => { alive = false; };
