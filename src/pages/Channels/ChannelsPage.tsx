@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Share2, CheckCircle2, AlertCircle, ExternalLink, ShieldCheck, Link2, Unplug, RefreshCw, CircleHelp } from 'lucide-react';
 import { Modal } from '../../components/common/Modal';
 import { apiClient, SocialConnection } from '../../services/api/client';
+import { ChannelAvailabilityNotice } from '../../components/common/ChannelAvailabilityNotice';
 
 type PlatformId = SocialConnection['platform'];
 const PLATFORMS: { id: PlatformId; name: string; mark: string; description: string; limitation: string }[] = [
@@ -12,97 +13,6 @@ const PLATFORMS: { id: PlatformId; name: string; mark: string; description: stri
   { id: 'x', name: 'X', mark: '𝕏', description: 'Publish posts and read/reply to mentions.', limitation: 'Requires X developer API access and OAuth 2.0 user-context permissions. API pricing/limits may apply.' },
   { id: 'youtube', name: 'YouTube', mark: 'YT', description: 'Connect a channel and manage video comments.', limitation: 'The YouTube Data API supports video-comment sync/replies in this build, but not text-only Community posts. Video upload is also not yet wired into the composer.' }
 ];
-
-
-export default function ChannelAvailabilityNotice() {
-  return (
-    <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-900 dark:bg-amber-950/20">
-
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-xl dark:bg-amber-900/50 dark:text-amber-300">
-          ℹ
-        </div>
-
-        <div className="flex-1">
-          <h3 className="text-base font-semibold text-gray-900 dark:text-white">
-            Channel Availability & Integration Notice
-          </h3>
-
-          <p className="mt-2 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-            We have made multiple attempts to establish integrations
-            across all supported social media platforms. Here is the
-            current integration status for our hackathon demonstration:
-          </p>
-
-          <div className="mt-4 space-y-3">
-
-            <div className="flex items-start gap-2">
-              <span className="text-green-600 font-bold">✓</span>
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                <strong>LinkedIn:</strong> Successfully integrated
-                and functional.
-              </p>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <span className="text-amber-600 font-bold">!</span>
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                <strong>X (Twitter):</strong> Partially functional.
-                Full API access requires a $5 API credit purchase.
-                We have decided to defer this expense until Round 3.
-              </p>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <span className="text-amber-600 font-bold">!</span>
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                <strong>Meta, Instagram, Threads & YouTube:</strong>
-                These integrations require evaluator accounts to be
-                added as tester accounts to our developer applications.
-                Since we do not have access to the evaluators' accounts,
-                completing this verification process is not currently
-                possible.
-              </p>
-            </div>
-
-          </div>
-
-          <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/30">
-            <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300">
-              Why not publish the applications?
-            </h4>
-
-            <p className="mt-1 text-sm leading-relaxed text-blue-900 dark:text-blue-200">
-              Public application approval and publishing can take
-              anywhere from several days to weeks, which falls outside
-              the available hackathon timeline.
-            </p>
-          </div>
-
-          <div className="mt-4 rounded-lg bg-white p-4 shadow-sm dark:bg-gray-900">
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">
-              <span className="mr-2">🚀</span>
-              Want to experience Plumbline across social media?
-            </p>
-
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Our Plumbline Chrome Extension provides an alternative
-              way to experience our brand-checking functionality while
-              browsing social media platforms.
-            </p>
-
-            <p className="mt-2 text-sm font-medium text-blue-600 dark:text-blue-400">
-              Please download and install the Chrome Extension using
-              the setup instructions provided on your dashboard.
-            </p>
-          </div>
-
-        </div>
-      </div>
-    </div>
-  );
-}
-
 
 export const ChannelsPage: React.FC = () => {
   const [connections, setConnections] = useState<SocialConnection[]>([]);
