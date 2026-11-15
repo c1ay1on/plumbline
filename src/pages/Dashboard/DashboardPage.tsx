@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { Badge } from '../../components/common/Badge';
+import { ExtensionSetupCard } from '../../components/common/ExtensionSetupCard';
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -75,6 +76,8 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
+      <ExtensionSetupCard />
+      
       {/* A. Overview Statistics (4 Cards) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Drafts */}
