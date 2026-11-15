@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Upload,
@@ -40,8 +40,22 @@ export const CreatePostPage: React.FC = () => {
   const [activePlatformTab, setActivePlatformTab] = useState<Platform>('linkedin');
 
   // Media preview
-  const [mediaUrl, setMediaUrl] = useState<string>('');
-  const [mediaAltText, setMediaAltText] = useState<string>('');
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreviewUrl, setMediaPreviewUrl] = useState('');
+  const [mediaAltText, setMediaAltText] = useState('');
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!mediaFile) {
+      setMediaPreviewUrl('');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(mediaFile);
+    setMediaPreviewUrl(previewUrl);
+
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [mediaFile]);
 
   // Platform variants
   const [platformVariants, setPlatformVariants] = useState<Partial<Record<Platform, PostPlatformVariant>>>({});
@@ -65,7 +79,7 @@ export const CreatePostPage: React.FC = () => {
     caption,
     selectedPlatforms,
     guidelines,
-    Boolean(mediaUrl),
+    Boolean(mediaFile),
     mediaAltText
   );
   const auditResult = aiAuditResult || { ...localAuditResult, isLiveAi: false };
@@ -75,7 +89,7 @@ export const CreatePostPage: React.FC = () => {
     setIsAuditing(true);
     setAiAuditError('');
     try {
-      const result = await groqService.auditContent(caption, selectedPlatforms, guidelines, Boolean(mediaUrl), mediaAltText);
+      const result = await groqService.auditContent(caption, selectedPlatforms, guidelines, Boolean(mediaFile), mediaAltText);
       setAiAuditResult(result);
       if (!result.isLiveAi) setAiAuditError('Groq is not configured or the request failed. Showing the local rule-based audit instead.');
     } catch (error) {
@@ -114,7 +128,31 @@ export const CreatePostPage: React.FC = () => {
   };
 
   const removeMedia = () => {
-    setMediaUrl('');
+    setMediaFile(null);
+    setMediaAltText('');
+
+    if (mediaInputRef.current) {
+      mediaInputRef.current.value = '';
+    }
+  };
+
+  const handleMediaSelection = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) return;
+
+    if (
+      !file.type.startsWith('image/') &&
+      !file.type.startsWith('video/')
+    ) {
+      alert('Please choose an image or video file.');
+      event.target.value = '';
+      return;
+    }
+
+    setMediaFile(file);
     setMediaAltText('');
   };
 
@@ -176,7 +214,7 @@ export const CreatePostPage: React.FC = () => {
       creatorName: currentUser.name,
       creatorRole: currentRole === 'manager' || currentRole === 'owner' || currentRole === 'admin' ? 'Manager' : 'Social Media Creator',
       platforms: selectedPlatforms,
-      mediaUrls: mediaUrl ? [mediaUrl] : [],
+      mediaUrls: [],
       mediaType: 'image',
       platformVariants,
       status: 'draft',
@@ -197,7 +235,7 @@ export const CreatePostPage: React.FC = () => {
       creatorName: currentUser.name,
       creatorRole: currentRole === 'manager' || currentRole === 'owner' || currentRole === 'admin' ? 'Manager' : 'Social Media Creator',
       platforms: selectedPlatforms,
-      mediaUrls: mediaUrl ? [mediaUrl] : [],
+      mediaUrls: [],
       mediaType: 'image',
       platformVariants,
       status: 'in_review',
@@ -230,7 +268,8 @@ export const CreatePostPage: React.FC = () => {
             Create post
           </h1>
           <p className="text-sm text-[#68756F] mt-1">
-            Write once, review per platform, publish together.
+            Test AI-powered brand tone, content adaptations and guideline checks.
+            Nothing is published to social media from this demo page.
           </p>
         </div>
 
@@ -239,6 +278,30 @@ export const CreatePostPage: React.FC = () => {
           <BrandRiskScore score={auditResult.score} compact />
         </div>
       </div>
+
+      <section className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
+        <AlertTriangle className="h-5 w-5 text-amber-800 mt-1" />
+
+        <div>
+          <h2 className="text-sm font-bold text-amber-950">
+            Demo mode — AI testing only, no live publishing
+          </h2>
+
+          <p className="mt-1 text-xs sm:text-sm leading-relaxed text-amber-900">
+            Use this page to test brand tone, platform-specific copy
+            suggestions and checks against your saved brand guidelines.
+            The actions below only create internal demo records in your
+            Plumbline workspace. Nothing is published to LinkedIn,
+            Instagram, X or any other connected social account.
+          </p>
+
+          <p className="mt-2 text-xs leading-relaxed text-amber-900">
+            Media selected here is previewed locally in this browser only.
+            It is not uploaded to the backend or included in saved demo
+            records.
+          </p>
+        </div>
+      </section>
 
       {/* Two-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -264,34 +327,99 @@ export const CreatePostPage: React.FC = () => {
               />
             </div>
 
-            {/* A. Public media URL */}
+            {/* Local Media Upload */}
             <div>
-              <label className="block text-xs font-semibold text-[#12201C] mb-1.5">
-                Public media URL (optional)
-              </label>
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-xs font-semibold text-[#12201C]">
+                  Upload media from your device
+                </label>
+
+                <span className="text-[10px] font-semibold text-stone-500">
+                  Local preview only
+                </span>
+              </div>
+
               <input
-                type="url"
-                value={mediaUrl}
-                onChange={e => setMediaUrl(e.target.value)}
-                placeholder="https://your-public-host/image.jpg"
-                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-[#0A4A3D]"
+                ref={mediaInputRef}
+                id="demo-media-upload"
+                type="file"
+                accept="image/*,video/*"
+                onChange={handleMediaSelection}
+                className="sr-only"
               />
-              <p className="text-[11px] text-stone-500 mt-1">
-                The URL must be publicly reachable over HTTPS. Local files and private Drive links cannot be fetched by social platforms. Image publishing is supported only where the connected platform API permits it.
-              </p>
-              {mediaUrl && /^https:\/\//i.test(mediaUrl) && (
+
+              <label
+                htmlFor="demo-media-upload"
+                className="flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed border-stone-300 bg-stone-50 cursor-pointer hover:border-[#0A4A3D] hover:bg-emerald-50/40"
+              >
+                <Upload className="w-6 h-6 text-[#0A4A3D]" />
+
+                <span className="text-xs font-semibold text-[#12201C]">
+                  {mediaFile ? 'Choose a different file' : 'Choose an image or video'}
+                </span>
+
+                <span className="text-[10px] text-stone-500">
+                  Select a file stored on your device
+                </span>
+              </label>
+
+              {mediaFile && mediaPreviewUrl && (
                 <div className="mt-3 rounded-xl border border-stone-200 overflow-hidden">
-                  <img src={mediaUrl} alt="Media preview" className="w-full max-h-56 object-contain bg-stone-50" />
-                  <button type="button" onClick={removeMedia} className="w-full py-2 text-xs text-red-600 hover:bg-red-50">Remove media URL</button>
+
+                  {mediaFile.type.startsWith('video/') ? (
+                    <video
+                      src={mediaPreviewUrl}
+                      controls
+                      className="w-full max-h-64 bg-black object-contain"
+                    />
+                  ) : (
+                    <img
+                      src={mediaPreviewUrl}
+                      alt={mediaAltText || mediaFile.name}
+                      className="w-full max-h-64 object-contain bg-stone-50"
+                    />
+                  )}
+
+                  <div className="p-3 flex items-center justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold truncate">
+                        {mediaFile.name}
+                      </p>
+                      <p className="text-[10px] text-stone-500">
+                        {(mediaFile.size / (1024 * 1024)).toFixed(2)} MB
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={removeMedia}
+                      className="text-xs text-red-600 font-semibold"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
               )}
-              {mediaUrl && !/^https:\/\//i.test(mediaUrl) && (
-                <p className="text-[11px] text-red-600 mt-1">Enter a publicly accessible HTTPS URL.</p>
-              )}
-              {mediaUrl && (
+
+              <p className="mt-2 text-[10px] leading-relaxed text-stone-500">
+                Demo only: media is not uploaded, saved or published.
+                The current AI checks use media presence and alt text only;
+                they do not analyse the actual image or video.
+              </p>
+
+              {mediaFile && (
                 <div className="mt-2.5">
-                  <label className="block text-[11px] font-semibold text-[#12201C] mb-1">Creative Alt Text</label>
-                  <input type="text" value={mediaAltText} onChange={e => setMediaAltText(e.target.value)} placeholder="Describe the image for screen-reader users" className="w-full px-3 py-1.5 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-[#0A4A3D]" />
+                  <label className="block text-[11px] font-semibold mb-1">
+                    Media description / Alt text
+                  </label>
+
+                  <input
+                    type="text"
+                    value={mediaAltText}
+                    onChange={e => setMediaAltText(e.target.value)}
+                    placeholder="Describe the media for accessibility checks"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200"
+                  />
                 </div>
               )}
             </div>
@@ -561,9 +689,8 @@ export const CreatePostPage: React.FC = () => {
         <div className="flex items-center gap-2 text-xs text-stone-600">
           <Info className="w-4 h-4 text-[#0A4A3D]" />
           <span>
-            {currentRole === 'employee'
-              ? 'Your submission will be saved for review in this workspace.'
-              : 'As a manager, you can review findings, request revisions, or directly approve.'}
+            These actions save internal demo records only.
+            Nothing is published to social media.
           </span>
         </div>
 
