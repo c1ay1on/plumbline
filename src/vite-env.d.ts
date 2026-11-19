@@ -10,3 +10,13 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+declare module 'virtual:sample-rulebooks' {
+  interface SampleRulebook {
+    name: string;
+    url: string;
+  }
+
+  const sampleRulebooks: SampleRulebook[];
+  export default sampleRulebooks;
+}

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { CitationList } from '../../components/rag/CitationList';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -16,7 +17,8 @@ import {
   Check,
   X,
   Lock,
-  Edit3
+  Edit3,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
@@ -24,6 +26,7 @@ import { Platform, AuditFinding } from '../../types';
 import { Badge } from '../../components/common/Badge';
 import { Modal } from '../../components/common/Modal';
 import { BrandRiskScore } from '../../components/common/BrandRiskScore';
+import { checkedVersion, isOutdatedCheck } from '../../services/governance/versioning';
 
 export const ReviewDetailPage: React.FC = () => {
   const { submissionId } = useParams<{ submissionId: string }>();
@@ -31,10 +34,13 @@ export const ReviewDetailPage: React.FC = () => {
   const { currentUser, currentRole } = useAuth();
   const {
     posts,
+    guidelines,
     approvePost,
     requestChanges,
     publishPost,
     updateFindingStatus,
+    disputeFinding,
+    recheckPosts,
     updatePost
   } = useWorkspace();
 
@@ -117,10 +123,17 @@ export const ReviewDetailPage: React.FC = () => {
 
   const handleContestSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!contestReason) return;
-
-    updateFindingStatus(post.id, contestFindingId, 'contested', contestReason);
+    disputeFinding(post.id, contestFindingId, contestReason);
     setContestModalOpen(false);
+  };
+
+  const reviewVersion = checkedVersion(post);
+  const outdated = isOutdatedCheck(post, guidelines.version);
+  const lockedHistory = (post.status === 'approved' || post.status === 'published') && reviewVersion !== guidelines.version;
+
+  const handleRecheck = () => {
+    if (!confirm(`Re-check this post against guidelines ${guidelines.version}? The ${reviewVersion} results stay in the audit history.`)) return;
+    recheckPosts([post.id]);
   };
 
   const handleRequestChangesSubmit = (e: React.FormEvent) => {
@@ -248,6 +261,13 @@ export const ReviewDetailPage: React.FC = () => {
             <span className="font-semibold text-amber-700">
               {openFindings.length} unresolved brand findings
             </span>
+            <span>•</span>
+            <span
+              className="font-semibold text-[#0A4A3D] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"
+              title={post.checkedAt ? `Checked ${new Date(post.checkedAt).toLocaleString()}` : undefined}
+            >
+              Checked against guidelines {reviewVersion}
+            </span>
           </div>
         </div>
 
@@ -287,11 +307,38 @@ export const ReviewDetailPage: React.FC = () => {
 
           {currentRole === 'employee' && (
             <div className="text-xs text-[#68756F] italic bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-200">
-              Creator View: Apply corrections below or contest flagged rules.
+              Creator View: Apply corrections below or dispute flagged rules.
             </div>
           )}
         </div>
       </div>
+
+      {outdated && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-5 h-5 text-[#B45309] flex-shrink-0" />
+            <span className="text-amber-900">
+              The active guidelines are <strong>{guidelines.version}</strong>. This review still shows its <strong>{reviewVersion}</strong> results
+              until it is re-checked. The current results move to the audit history, nothing is deleted.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleRecheck}
+            className="px-4 py-2 rounded-xl bg-[#0A4A3D] hover:bg-[#063028] text-white text-xs font-semibold flex items-center gap-2 self-start sm:self-auto whitespace-nowrap"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Re-check against {guidelines.version}
+          </button>
+        </div>
+      )}
+
+      {lockedHistory && (
+        <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 text-xs text-stone-600 flex items-center gap-2">
+          <Lock className="w-4 h-4 text-stone-500" />
+          This {post.status} review is kept exactly as it was checked against guidelines {reviewVersion}. Later guideline changes do not alter it.
+        </div>
+      )}
 
       {/* B. Platform Tabs */}
       <div className="flex items-center gap-2 border-b border-stone-200 pb-2">
@@ -404,6 +451,30 @@ export const ReviewDetailPage: React.FC = () => {
               ))}
             </div>
           </div>
+          {(post.auditHistory?.length || 0) > 0 && (
+            <div className="bg-white rounded-2xl p-6 border border-stone-200 shadow-plumb-subtle space-y-3">
+              <h3 className="text-sm font-bold text-[#12201C] flex items-center gap-2">
+                <History className="w-4 h-4 text-[#0A4A3D]" />
+                Earlier checks
+              </h3>
+              <p className="text-[11px] text-[#68756F]">Results from before this post was re-checked. Kept unchanged for the audit record.</p>
+              {[...(post.auditHistory || [])].reverse().map(item => (
+                <details key={`${item.guidelineVersion}-${item.checkedAt}`} className="p-3 rounded-xl bg-stone-50/80 border border-stone-200 text-xs">
+                  <summary className="cursor-pointer font-semibold text-[#12201C]">
+                    Guidelines {item.guidelineVersion} · {new Date(item.checkedAt).toLocaleString()} · {item.findings.length} finding(s), risk {item.brandRiskScore.overallScore}
+                  </summary>
+                  <ul className="mt-2 space-y-1">
+                    {item.findings.map(finding => (
+                      <li key={finding.id} className="text-[11px] text-stone-700">
+                        <strong>{finding.issueTitle}</strong> ({finding.status}){finding.contestedReason ? ` - disputed: "${finding.contestedReason}"` : ''}
+                      </li>
+                    ))}
+                    {item.findings.length === 0 && <li className="text-[11px] text-stone-500">No findings.</li>}
+                  </ul>
+                </details>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* D. AI Findings Panel & Risk Score (5 cols) */}
@@ -418,7 +489,7 @@ export const ReviewDetailPage: React.FC = () => {
                   AI Findings ({post.findings.length})
                 </h3>
                 <p className="text-xs text-[#68756F]">
-                  Click "Apply fix" or "Contest" to modify findings.
+                  Click "Apply fix", or "Dispute this flag" if the rule does not fit.
                 </p>
               </div>
             </div>
@@ -495,12 +566,20 @@ export const ReviewDetailPage: React.FC = () => {
                     {/* Source reference citation */}
                     <div className="text-[10px] text-stone-500 font-mono">
                       Source: <strong>{finding.sourceReference}</strong>
+                      {finding.ruleLabel && <> · Rule: <strong>{finding.ruleLabel}</strong></>}
                     </div>
+                    <CitationList citations={finding.citations} />
 
                     {/* Contested reason if present */}
                     {finding.contestedReason && (
                       <div className="p-2 rounded bg-amber-100/60 border border-amber-300 text-[11px] text-amber-900">
-                        <strong>Creator Contestation:</strong> "{finding.contestedReason}"
+                        <strong>Disputed{finding.disputedBy ? ` by ${finding.disputedBy}` : ''}:</strong> "{finding.contestedReason}"
+                      </div>
+                    )}
+
+                    {finding.status === 'contested' && !finding.contestedReason && (
+                      <div className="p-2 rounded bg-amber-100/60 border border-amber-300 text-[11px] text-amber-900">
+                        <strong>Disputed{finding.disputedBy ? ` by ${finding.disputedBy}` : ''}</strong> (no reason given)
                       </div>
                     )}
 
@@ -520,7 +599,7 @@ export const ReviewDetailPage: React.FC = () => {
                           onClick={() => openContestDialog(finding.id)}
                           className="px-2.5 py-1 rounded-lg border border-stone-200 hover:bg-stone-100 text-[11px] font-medium text-stone-600"
                         >
-                          Contest finding
+                          Dispute this flag
                         </button>
                         <button
                           type="button"
@@ -544,20 +623,19 @@ export const ReviewDetailPage: React.FC = () => {
       <Modal
         isOpen={contestModalOpen}
         onClose={() => setContestModalOpen(false)}
-        title="Contest AI Brand Finding"
-        subtitle="Provide evidence or context for why this copy should be accepted by your manager."
+        title="Dispute this flag"
+        subtitle="Disputes are counted per rule. Rules that are disputed often are sent to the guideline owner to clarify."
       >
         <form onSubmit={handleContestSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-[#12201C] mb-1">
-              Contestation Rationale
+              Reason (optional)
             </label>
             <textarea
               rows={4}
-              required
               value={contestReason}
               onChange={e => setContestReason(e.target.value)}
-              placeholder="Add the context for your decision or suggested changes..."
+              placeholder="e.g. This is a direct quote from a student, so the term should be allowed here."
               className="w-full p-3 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-[#0A4A3D]"
             />
           </div>
@@ -574,7 +652,7 @@ export const ReviewDetailPage: React.FC = () => {
               type="submit"
               className="px-5 py-2 rounded-xl bg-[#0A4A3D] text-white text-xs font-semibold"
             >
-              Submit Contestation
+              Dispute flag
             </button>
           </div>
         </form>

@@ -1,3 +1,5 @@
+import type { AmbiguousRuleAlert, ApprovalTimeStats, ChangeImpact, GuidelineRulesSnapshot, RuleChange, AuditFinding, BrandRiskScore, GroundedAuditMeta, RulebookDocument } from '../../types';
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
 const TOKEN_KEY = 'plumbline_access_token';
 
@@ -32,6 +34,16 @@ export interface ApiUser {
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) { super(message); this.status = status; }
+}
+
+function insightQuery(f: { days?: number; team?: string; platform?: string; creatorId?: string }): string {
+  const q = new URLSearchParams();
+  if (f.days) q.set('days', String(f.days));
+  if (f.team) q.set('team', f.team);
+  if (f.platform) q.set('platform', f.platform);
+  if (f.creatorId) q.set('creator_id', f.creatorId);
+  const s = q.toString();
+  return s ? `?${s}` : '';
 }
 
 class ApiClient {
@@ -94,6 +106,23 @@ class ApiClient {
   saveWorkspaceData(data: Record<string, unknown>) { return this.request<{ status: string }>('/api/workspace/data', { method: 'PUT', body: JSON.stringify({ data }) }); }
   getWorkspaceMembers() { return this.request<Array<{ id: string; name: string; email: string; role: string; department: string; status: string; draftCount: number | null; pendingSubmissions: number | null; lastActive: string }>>('/api/workspace/members'); }
 
+  // --- Governance Insights -------------------------------------------------
+  getGovernanceInsights(filters: { days?: number; team?: string; platform?: string; creatorId?: string } = {}) {
+    return this.request<import('../../types').GovernanceInsights>(`/api/analytics/governance${insightQuery(filters)}`);
+  }
+  async downloadGovernanceReport(filters: { days?: number; team?: string; platform?: string; creatorId?: string } = {}) {
+    const response = await fetch(`${API_BASE_URL}/api/analytics/governance.csv${insightQuery(filters)}`, {
+      headers: { Authorization: `Bearer ${this.getToken()}` }
+    });
+    if (!response.ok) throw new ApiError('Could not export the report.', response.status);
+    return response.blob();
+  }
+  updateWorkspaceMember(memberId: string, body: { department?: string; role?: string }) {
+    return this.request<{ id: string; name: string; email: string; role: string; department: string }>(
+      `/api/workspace/members/${encodeURIComponent(memberId)}`, { method: 'PATCH', body: JSON.stringify(body) }
+    );
+  }
+
   me() { return this.request<ApiUser>('/api/auth/me'); }
   logout() { return this.request<{ status: string }>('/api/auth/logout', { method: 'POST' }); }
 
@@ -110,6 +139,42 @@ class ApiClient {
   getSocialComments() { return this.request<any[]>('/api/social/comments'); }
   replyToSocialComment(commentId: string, platform: string, replyText: string, accountId?: string) {
     return this.request<{ status: string }>(`/api/social/comments/${encodeURIComponent(commentId)}/reply`, { method: 'POST', body: JSON.stringify({ platform, reply_text: replyText, account_id: accountId }) });
+  }
+  getGovernanceSummary() { return this.request<{ approvalTime: ApprovalTimeStats; alerts: AmbiguousRuleAlert[]; thresholds: Record<string, number>; currentVersion: string }>('/api/governance/summary'); }
+  getApprovalTime() { return this.request<ApprovalTimeStats>('/api/governance/approval-time'); }
+  getRuleAlerts(includeClosed = false) {
+    return this.request<{ alerts: AmbiguousRuleAlert[] }>(`/api/governance/alerts${includeClosed ? '?include_closed=true' : ''}`);
+  }
+  recordDispute(body: { rule_id: string; rule_label: string; post_id: string; finding_id: string; reason: string; guideline_version: string }) {
+    return this.request<{ status: string; ruleId: string; alert: AmbiguousRuleAlert | null }>('/api/governance/disputes', { method: 'POST', body: JSON.stringify(body) });
+  }
+  suggestRuleClarification(ruleId: string) {
+    return this.request<AmbiguousRuleAlert>(`/api/governance/alerts/${encodeURIComponent(ruleId)}/suggestion`, { method: 'POST' });
+  }
+  dismissRuleAlert(ruleId: string, note = '') {
+    return this.request<{ status: string }>(`/api/governance/alerts/${encodeURIComponent(ruleId)}/dismiss`, { method: 'POST', body: JSON.stringify({ note }) });
+  }
+  resolveRuleAlert(ruleId: string, version: string, note = '') {
+    return this.request<{ status: string }>(`/api/governance/alerts/${encodeURIComponent(ruleId)}/resolve`, { method: 'POST', body: JSON.stringify({ version, note }) });
+  }
+  createGuidelineVersion(body: { id?: string; previous_id?: string; version_number: number; change_summary: string; rules: GuidelineRulesSnapshot; previous_rules?: GuidelineRulesSnapshot }) {
+    return this.request<{ version: { id: string; version: string; versionNumber: number }; changes: RuleChange[]; impact: ChangeImpact }>('/api/governance/versions', { method: 'POST', body: JSON.stringify(body) });
+  }
+  getGuidelineVersionDiff(versionNumber: number) {
+    return this.request<{ version: string; against: string | null; changes: RuleChange[] }>(`/api/governance/versions/${versionNumber}/diff`);
+  }
+
+  // Improvement 1: grounded RAG audit + rulebook upload
+  listRulebooks() { return this.request<RulebookDocument[]>('/api/rag/rulebooks'); }
+  uploadRulebook(file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    return this.request<RulebookDocument & { preview: Array<{ id: string; label: string; text: string }> }>('/api/rag/rulebooks', { method: 'POST', body: form });
+  }
+  deleteRulebook(id: string) { return this.request<{ status: string }>(`/api/rag/rulebooks/${encodeURIComponent(id)}`, { method: 'DELETE' }); }
+  getRulebookChunks(id: string) { return this.request<Array<{ id: string; label: string; text: string; page: number | null }>>(`/api/rag/rulebooks/${encodeURIComponent(id)}/chunks`); }
+  groundedAudit(body: { text: string; platforms: string[]; guidelines?: unknown; hasMedia?: boolean; mediaAltText?: string }) {
+    return this.request<{ findings: AuditFinding[]; score: BrandRiskScore; retrieved: Array<{ id: string; label: string; text: string; score: number | null; source: string }>; meta: GroundedAuditMeta }>('/api/rag/audit', { method: 'POST', body: JSON.stringify(body) });
   }
   getAIStatus() { return this.request<{ configured: boolean; model: string }>('/api/ai/status'); }
   testAI() { return this.request<{ success: boolean; model: string }>('/api/ai/test', { method: 'POST' }); }

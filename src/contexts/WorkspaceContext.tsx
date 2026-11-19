@@ -8,16 +8,28 @@ import {
   ChannelConnection,
   TeamMember,
   AuditFinding,
-  Platform
+  Platform,
+  ChangeImpact,
+  RuleChange
 } from '../types';
 import { workspaceStorage } from '../services/workspaceStorage';
 import { apiClient, SocialConnection } from '../services/api/client';
+import { AIAuditEngine } from '../services/aiAuditService';
+import { diffRules, computeImpact, snapshotRules, versionNumber, PENDING_STATUSES } from '../services/governance/versioning';
+import { resolveRuleId, ruleLabelFor } from '../services/governance/ambiguity';
+import { governanceService } from '../services/governance/governanceService';
 import { useAuth } from './AuthContext';
 
 interface PublishResult {
   succeeded: number;
   failed: number;
   errors: string[];
+}
+
+export interface SaveGuidelinesResult {
+  version: string;
+  changes: RuleChange[];
+  impact: ChangeImpact;
 }
 
 interface WorkspaceContextType {
@@ -28,6 +40,7 @@ interface WorkspaceContextType {
   comments: CommentItem[];
   channels: ChannelConnection[];
   teamMembers: TeamMember[];
+  updateTeamMember: (memberId: string, changes: { department?: string; role?: TeamMember['role'] }) => Promise<void>;
   isCleanWorkspace: boolean;
   createPost: (post: Omit<Post, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'reviewTrail'>) => Post;
   updatePost: (post: Post) => void;
@@ -36,11 +49,13 @@ interface WorkspaceContextType {
   requestChanges: (postId: string, reason: string) => void;
   publishPost: (postId: string) => Promise<PublishResult>;
   updateFindingStatus: (postId: string, findingId: string, status: AuditFinding['status'], reason?: string) => void;
+  disputeFinding: (postId: string, findingId: string, reason?: string) => void;
+  recheckPosts: (postIds: string[]) => number;
   replyToComment: (commentId: string, replyText: string) => Promise<void>;
   moderateComment: (commentId: string, action: 'report' | 'block' | 'delete', reason?: string) => void;
   syncSocialComments: () => Promise<number>;
-  saveGuidelines: (guidelines: BrandGuidelines, changeSummary: string) => void;
-  restoreGuidelineVersion: (version: string) => void;
+  saveGuidelines: (guidelines: BrandGuidelines, changeSummary: string) => SaveGuidelinesResult;
+  restoreGuidelineVersion: (version: string) => SaveGuidelinesResult | null;
   startCleanWorkspace: (organizationName: string, brandName: string) => void;
   refreshData: () => void;
 }
@@ -146,23 +161,77 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser.id, isAuthenticated]);
 
+  // Returns the history entry for the active guideline version, creating a baseline entry if there is none yet.
+  const ensureCurrentVersionEntry = (): GuidelineVersionHistory => {
+    const current = workspaceStorage.getGuidelines();
+    const history = workspaceStorage.getGuidelineVersions();
+    const existing = history.find(item => item.version === current.version);
+    if (existing?.id && existing.snapshot) return existing;
+    const entry: GuidelineVersionHistory = {
+      version: current.version,
+      editor: existing?.editor || current.updatedBy || currentUser.name,
+      timestamp: existing?.timestamp || current.lastUpdated || new Date().toISOString(),
+      summary: existing?.summary || 'Guidelines in use before version tracking started.',
+      changesCount: existing?.changesCount || 0,
+      ...existing,
+      id: existing?.id || `gv-${crypto.randomUUID()}`,
+      snapshot: existing?.snapshot || snapshotRules(current),
+      ruleChanges: existing?.ruleChanges || []
+    };
+    workspaceStorage.saveGuidelineVersions(existing
+      ? history.map(item => item.version === current.version ? entry : item)
+      : [entry, ...history]);
+    void syncVersionToServer(entry);
+    return entry;
+  };
+
+  const syncVersionToServer = async (entry: GuidelineVersionHistory, previous?: GuidelineVersionHistory) => {
+    if (!isAuthenticated || !entry.snapshot) return null;
+    try {
+      return await apiClient.createGuidelineVersion({
+        id: entry.id,
+        previous_id: previous?.id,
+        version_number: versionNumber(entry.version),
+        change_summary: entry.summary,
+        rules: entry.snapshot,
+        previous_rules: previous?.snapshot
+      });
+    } catch {
+      // The version is kept in the shared workspace history; the server copy is only a record.
+      return null;
+    }
+  };
+
   const createPost = (postData: Omit<Post, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'reviewTrail'>): Post => {
     const timestamp = new Date().toISOString();
+    const role = currentUser.role === 'manager' || currentUser.role === 'owner' || currentUser.role === 'admin' ? 'Manager' : 'Social Media Creator';
+    const versionEntry = ensureCurrentVersionEntry();
+    const reviewTrail: Post['reviewTrail'] = [{
+      id: `rev-${crypto.randomUUID()}`,
+      version: 'v1',
+      timestamp,
+      userName: currentUser.name,
+      userRole: role,
+      action: 'Created post draft',
+      comment: 'Initial draft composition.'
+    }];
+    if (postData.status === 'in_review') {
+      reviewTrail.push({
+        id: `rev-${crypto.randomUUID()}`, version: 'v1', timestamp, userName: currentUser.name, userRole: role,
+        action: 'Submitted for approval', comment: 'Submitted directly from the composer.'
+      });
+    }
     const newPost: Post = {
       ...postData,
       id: `post-${crypto.randomUUID()}`,
       version: 'v1',
+      guidelineVersion: versionEntry.version,
+      guidelineVersionId: versionEntry.id,
+      guidelineSnapshot: versionEntry.snapshot,
+      checkedAt: timestamp,
       createdAt: timestamp,
       updatedAt: timestamp,
-      reviewTrail: [{
-        id: `rev-${crypto.randomUUID()}`,
-        version: 'v1',
-        timestamp,
-        userName: currentUser.name,
-        userRole: currentUser.role === 'manager' || currentUser.role === 'owner' || currentUser.role === 'admin' ? 'Manager' : 'Social Media Creator',
-        action: 'Created post draft',
-        comment: 'Initial draft composition.'
-      }]
+      reviewTrail
     };
     workspaceStorage.addPost(newPost);
     refreshData();
@@ -185,7 +254,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       id: `rev-${crypto.randomUUID()}`, version: nextVer, timestamp: post.updatedAt,
       userName: currentUser.name,
       userRole: currentUser.role === 'manager' || currentUser.role === 'owner' || currentUser.role === 'admin' ? 'Manager' : 'Social Media Creator',
-      action: 'Submitted for approval', comment: notes || 'Submitted draft for review.'
+      action: 'Submitted for approval', comment: notes || 'Submitted draft for review.',
+      findingsSnapshot: {
+        total: post.findings.length,
+        open: post.findings.filter(f => f.status === 'open' || f.status === 'contested').length,
+        resolved: post.findings.filter(f => f.status === 'accepted' || f.status === 'fixed' || f.status === 'resolved').length,
+        critical: post.findings.filter(f => f.severity === 'critical' && f.status !== 'rejected').length
+      }
     });
     workspaceStorage.updatePost(post);
     refreshData();
@@ -285,9 +360,70 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   };
 
+  const updateTeamMember = async (memberId: string, changes: { department?: string; role?: TeamMember['role'] }) => {
+    const updated = await apiClient.updateWorkspaceMember(memberId, changes);
+    setTeamMembers(prev => prev.map(member => member.id === memberId
+      ? { ...member, department: updated.department, role: updated.role as TeamMember['role'] }
+      : member));
+  };
+
   const updateFindingStatus = (postId: string, findingId: string, status: AuditFinding['status'], reason?: string) => {
     workspaceStorage.updateFindingStatus(postId, findingId, status, reason);
     refreshData();
+  };
+
+  const disputeFinding = (postId: string, findingId: string, reason?: string) => {
+    const post = workspaceStorage.getPostById(postId);
+    const finding = post?.findings.find(item => item.id === findingId);
+    if (!post || !finding) return;
+    const rulesAtCheck = post.guidelineSnapshot ? { ...guidelines, terminology: post.guidelineSnapshot.terminology } : guidelines;
+    const ruleId = resolveRuleId(finding, rulesAtCheck);
+    const ruleLabel = finding.ruleLabel || ruleLabelFor(ruleId, rulesAtCheck);
+    workspaceStorage.disputeFinding(postId, findingId, {
+      reason: (reason || '').trim(), ruleId, ruleLabel, disputedBy: currentUser.name, disputedAt: new Date().toISOString()
+    });
+    refreshData();
+    void governanceService.recordDispute(post, findingId, ruleId, ruleLabel, (reason || '').trim());
+  };
+
+  // Re-runs the rule checks on pending posts against the active guidelines. The previous result is kept in auditHistory.
+  const recheckPosts = (postIds: string[]): number => {
+    const versionEntry = ensureCurrentVersionEntry();
+    const active = workspaceStorage.getGuidelines();
+    let count = 0;
+    postIds.forEach(postId => {
+      const post = workspaceStorage.getPostById(postId);
+      if (!post || !PENDING_STATUSES.includes(post.status)) return;
+      const variantTexts = Object.values(post.platformVariants || {}).map(variant => variant?.description || '').filter(Boolean);
+      const text = variantTexts.length ? Array.from(new Set(variantTexts)).join('\n') : post.originalDescription;
+      const result = AIAuditEngine.auditContent(text, post.platforms, active, post.mediaUrls.length > 0);
+      const timestamp = new Date().toISOString();
+      const previousVersion = post.guidelineVersion || post.findings[0]?.guidelineVersion || 'v1';
+      const updated: Post = {
+        ...post,
+        auditHistory: [...(post.auditHistory || []), {
+          guidelineVersion: previousVersion, guidelineVersionId: post.guidelineVersionId,
+          checkedAt: post.checkedAt || post.createdAt, findings: post.findings, brandRiskScore: post.brandRiskScore
+        }],
+        findings: result.findings,
+        brandRiskScore: result.score,
+        guidelineVersion: versionEntry.version,
+        guidelineVersionId: versionEntry.id,
+        guidelineSnapshot: versionEntry.snapshot,
+        checkedAt: timestamp,
+        updatedAt: timestamp,
+        reviewTrail: [...post.reviewTrail, {
+          id: `rev-${crypto.randomUUID()}`, version: post.version, timestamp, userName: currentUser.name,
+          userRole: currentUser.role === 'employee' ? 'Social Media Creator' : 'Manager',
+          action: `Re-checked against guidelines ${versionEntry.version}`,
+          comment: `${result.findings.length} finding(s). The ${previousVersion} check is kept in the audit history.`
+        }]
+      };
+      workspaceStorage.updatePost(updated);
+      count += 1;
+    });
+    refreshData();
+    return count;
   };
 
   const replyToComment = async (commentId: string, replyText: string) => {
@@ -336,40 +472,49 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return syncedFromCurrentAccounts.filter(item => !item.id.startsWith('permission-')).length;
   };
 
-  const saveGuidelines = (newGuidelines: BrandGuidelines, changeSummary: string) => {
-    const currentVerNum = parseInt(newGuidelines.version.replace('v', ''), 10) || 0;
+  const saveGuidelines = (newGuidelines: BrandGuidelines, changeSummary: string): SaveGuidelinesResult => {
+    const previousEntry = ensureCurrentVersionEntry();
+    const history = workspaceStorage.getGuidelineVersions();
+    const currentVerNum = Math.max(versionNumber(workspaceStorage.getGuidelines().version), ...history.map(item => versionNumber(item.version)));
     const nextVersion = `v${currentVerNum + 1}`;
+    const timestamp = new Date().toISOString();
     const updatedGuidelines: BrandGuidelines = {
       ...newGuidelines,
       version: nextVersion,
-      lastUpdated: new Date().toISOString(),
+      lastUpdated: timestamp,
       updatedBy: `${currentUser.name} (${currentUser.role})`
     };
+    const snapshot = snapshotRules(updatedGuidelines);
+    const changes = diffRules(previousEntry.snapshot, snapshot);
     const newHistoryItem: GuidelineVersionHistory = {
-      version: nextVersion, editor: currentUser.name, timestamp: new Date().toISOString(),
-      summary: changeSummary || 'Updated brand guidelines and approved knowledge.', changesCount: 1
+      id: `gv-${crypto.randomUUID()}`,
+      version: nextVersion, editor: currentUser.name, timestamp,
+      summary: changeSummary || 'Updated brand guidelines and approved knowledge.',
+      changesCount: changes.length,
+      snapshot,
+      ruleChanges: changes
     };
     workspaceStorage.saveGuidelines(updatedGuidelines);
-    workspaceStorage.saveGuidelineVersions([newHistoryItem, ...workspaceStorage.getGuidelineVersions()]);
+    workspaceStorage.saveGuidelineVersions([newHistoryItem, ...history]);
     refreshData();
+    void syncVersionToServer(newHistoryItem, previousEntry);
+    return { version: nextVersion, changes, impact: computeImpact(workspaceStorage.getPosts(), changes, nextVersion) };
   };
 
-  const restoreGuidelineVersion = (version: string) => {
-    const historyItem = guidelineVersions.find(item => item.version === version);
-    if (!historyItem) return;
-    const currentVerNum = parseInt(guidelines.version.replace('v', ''), 10) || 0;
-    const nextVersion = `v${currentVerNum + 1}`;
-    const updated: BrandGuidelines = {
-      ...guidelines, version: nextVersion, lastUpdated: new Date().toISOString(),
-      updatedBy: `${currentUser.name} (restored from ${version})`
-    };
-    const historyEntry: GuidelineVersionHistory = {
-      version: nextVersion, editor: currentUser.name, timestamp: new Date().toISOString(),
-      summary: `Restored rules and facts from ${version}.`, changesCount: 1
-    };
-    workspaceStorage.saveGuidelines(updated);
-    workspaceStorage.saveGuidelineVersions([historyEntry, ...guidelineVersions]);
-    refreshData();
+  const restoreGuidelineVersion = (version: string): SaveGuidelinesResult | null => {
+    const historyItem = workspaceStorage.getGuidelineVersions().find(item => item.version === version);
+    if (!historyItem) return null;
+    const current = workspaceStorage.getGuidelines();
+    const restored: BrandGuidelines = historyItem.snapshot ? {
+      ...current,
+      terminology: historyItem.snapshot.terminology,
+      // Facts keep their extra fields (owner, dates) when they still exist; removed ones come back with defaults.
+      facts: historyItem.snapshot.facts.map(fact => ({
+        approvalOwner: '', version, lastUpdated: '', ...current.facts.find(item => item.id === fact.id), ...fact
+      })),
+      voice: { ...current.voice, ...historyItem.snapshot.voice }
+    } : current;
+    return saveGuidelines(restored, `Restored rules and facts from ${version}.`);
   };
 
   const startCleanWorkspace = (organizationName: string, brandName: string) => {
@@ -379,9 +524,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   return (
     <WorkspaceContext.Provider value={{
-      workspace, guidelines, guidelineVersions, posts, comments, channels, teamMembers,
+      workspace, guidelines, guidelineVersions, posts, comments, channels, teamMembers, updateTeamMember,
       isCleanWorkspace: workspaceStorage.isCleanWorkspace(), createPost, updatePost, submitPostForApproval,
-      approvePost, requestChanges, publishPost, updateFindingStatus, replyToComment, moderateComment,
+      approvePost, requestChanges, publishPost, updateFindingStatus, disputeFinding, recheckPosts, replyToComment, moderateComment,
       syncSocialComments, saveGuidelines, restoreGuidelineVersion,
       startCleanWorkspace, refreshData
     }}>

@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "Plumbline Brand Guard",
+  "short_name": "Plumbline",
+  "version": "1.0.0",
+  "description": "Brings Plumbline's brand-governance audit (rules + RAG + LLM) into the apps Plumbline can't publish to yet.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "ui/popup.html",
+    "default_title": "Plumbline Brand Guard"
+  },
+  "options_page": "ui/options.html",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://api.groq.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*",
+    "https://*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content/content.js"
+      ],
+      "css": [
+        "content/content.css"
+      ],
+      "run_at": "document_idle",
+      "exclude_matches": [
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*"
+      ]
+    }
+  ]
+}

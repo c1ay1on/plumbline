@@ -30,6 +30,7 @@ def public_user(row) -> dict:
         "email": row["email"],
         "role": row["role"],
         "workspaceId": row["workspace_id"],
+        "department": row["department"] if "department" in row.keys() else "",
         "createdAt": row["created_at"],
         "lastLogin": row["last_login"],
     }

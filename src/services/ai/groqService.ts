@@ -5,16 +5,25 @@ import {
   Platform,
   PostPlatformVariant,
   AISuggestionItem,
-  GroqConfig
+  GroqConfig,
+  GroundedAuditMeta
 } from '../../types';
+
+export type GroundedRetrieved = { id: string; label: string; text: string; score: number | null; source: string };
 import { AIAuditEngine } from '../aiAuditService';
 import { apiClient } from '../api/client';
+import { resolveRuleId, ruleLabelFor } from '../governance/ambiguity';
 
-export const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile';
+// Links a model finding to the workspace rule it came from so disputes can be counted per rule.
+function withRule(finding: AuditFinding, guidelines: BrandGuidelines): AuditFinding {
+  const ruleId = resolveRuleId(finding, guidelines);
+  return { ...finding, ruleId, ruleLabel: ruleLabelFor(ruleId, guidelines) };
+}
+
+// Groq shut down llama-3.3-70b-versatile and llama-3.1-8b-instant on 2026-08-16.
+export const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-120b';
 
 export const POPULAR_GROQ_MODELS = [
-  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile' },
-  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant' },
   { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B' },
   { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B' }
 ];
@@ -44,7 +53,10 @@ class GroqService {
   }
 
   /**
-   * Run brand audit using Groq Llama 3.3 or fallback to deterministic engine
+   * Grounded audit (Improvement 1). The backend runs the same RAG engine the Chrome
+   * extension uses: rule checks + hybrid retrieval over Brand Knowledge and uploaded
+   * rulebooks + Groq, and every finding cites the exact rule passage it came from.
+   * Falls back to the local rule engine only if the backend cannot be reached.
    */
   async auditContent(
     text: string,
@@ -52,90 +64,16 @@ class GroqService {
     guidelines: BrandGuidelines,
     hasMedia: boolean = false,
     mediaAltText?: string
-  ): Promise<{ findings: AuditFinding[]; score: BrandRiskScore; isLiveAi: boolean }> {
-    const config = await this.getConfigAsync();
-
-    if (!config.isActive) {
-      // Fallback to local rule engine
-      const localResult = AIAuditEngine.auditContent(text, platforms, guidelines, hasMedia, mediaAltText);
-      return { ...localResult, isLiveAi: false };
-    }
-
+  ): Promise<{ findings: AuditFinding[]; score: BrandRiskScore; isLiveAi: boolean; meta?: GroundedAuditMeta; retrieved?: GroundedRetrieved[]; offline?: boolean }> {
     try {
-      const systemPrompt = `You are Plumbline, an intelligent AI brand-governance auditing engine.
-Core Philosophy: "AI flags and suggests. Your reviewers decide. Nothing is rewritten silently."
-
-Analyze social media content against the organization's official brand guidelines:
-Brand Voice Tones: ${guidelines.voice.tones.join(', ')}
-Custom Tone Description: ${guidelines.voice.customToneDescription}
-Platform Tone Rules:
-${Object.entries(guidelines.voice.platformRules).map(([p, r]) => `- ${p}: ${r}`).join('\n')}
-
-Terminology Dictionary:
-${guidelines.terminology.map(t => `- Context: ${t.context} | Preferred: "${t.preferredTerm}" | Banned/Discouraged: "${t.bannedTerm}" | Rule: ${t.explanation}`).join('\n')}
-
-Approved Verified Facts:
-${guidelines.facts.map(f => `- [${f.category}] Fact: "${f.fact}" (Source: ${f.source}, Status: ${f.approvalStatus})`).join('\n')}
-
-Instructions:
-1. Detect unverified promotional claims, superlatives (like "number 1", "best"), or unverified stats not backed by the approved facts (category: "unsupported_claim", severity: "critical").
-2. Detect banned or discouraged terms (category: "terminology", severity: "warning").
-3. Detect tone mismatches for target platforms: ${platforms.join(', ')} (category: "tone_mismatch", severity: "warning").
-${hasMedia && !mediaAltText ? '4. Flag missing alt text description for attached media (category: "alt_text_missing", severity: "suggestion").' : ''}
-
-You MUST return ONLY valid JSON matching this structure:
-{
-  "findings": [
-    {
-      "category": "unsupported_claim" | "tone_mismatch" | "terminology" | "alt_text_missing",
-      "severity": "critical" | "warning" | "suggestion",
-      "issueTitle": "Brief title of the finding",
-      "description": "Clear explanation of the violation",
-      "affectedContent": "Exact substring from copy",
-      "sourceReference": "Citation from brand guidelines or facts",
-      "suggestedCorrection": "Actionable correction",
-      "confidence": 0.95
-    }
-  ]
-}`;
-
-      const userPrompt = `Target Platforms: ${platforms.join(', ')}
-Post Copy:
-"""${text}"""
-${hasMedia ? `Attached Creative Artwork: Yes, Alt text: ${mediaAltText || 'NONE'}` : 'Attached Creative Artwork: None'}`;
-
-      const data = await apiClient.groqCompletion({
-        model: config.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.1
-      });
-      const parsed = JSON.parse(data.choices[0].message.content);
-
-      const rawFindings = parsed.findings || [];
-      const findings: AuditFinding[] = rawFindings.map((f: any, idx: number) => ({
-        id: `groq-f-${idx}-${Date.now()}`,
-        category: f.category || 'tone_mismatch',
-        severity: f.severity || 'warning',
-        issueTitle: f.issueTitle || 'Brand rule alert',
-        description: f.description || '',
-        affectedContent: f.affectedContent || '',
-        sourceReference: f.sourceReference || 'Active Brand Guidelines',
-        guidelineVersion: guidelines.version,
-        suggestedCorrection: f.suggestedCorrection || '',
-        confidence: typeof f.confidence === 'number' ? f.confidence : 0.95,
-        status: 'open'
-      }));
-
-      const score = AIAuditEngine.calculateRiskScore(findings);
-      return { findings, score, isLiveAi: true };
+      const result = await apiClient.groundedAudit({ text, platforms, guidelines, hasMedia, mediaAltText });
+      // Stamp each finding with its workspace rule so disputes, ambiguity alerts and Insights group it correctly.
+      const findings = result.findings.map(f => withRule({ ...f, guidelineVersion: f.guidelineVersion || guidelines.version }, guidelines));
+      return { findings, score: result.score, isLiveAi: Boolean(result.meta.provider), meta: result.meta, retrieved: result.retrieved };
     } catch (err) {
-      console.warn('Groq AI audit encountered error, falling back to local engine:', err);
+      console.warn('Grounded audit unavailable, falling back to local rule engine:', err);
       const localResult = AIAuditEngine.auditContent(text, platforms, guidelines, hasMedia, mediaAltText);
-      return { ...localResult, isLiveAi: false };
+      return { ...localResult, findings: localResult.findings.map(f => withRule(f, guidelines)), isLiveAi: false, offline: true };
     }
   }
 

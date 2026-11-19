@@ -1,0 +1,21 @@
+* { box-sizing: border-box; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
+body { margin: 0; color: #111827; font-size: 13px; }
+.page { max-width: 720px; margin: 32px auto; padding: 0 20px; }
+.popup { width: 360px; padding: 12px; }
+h1 { font-size: 22px; margin: 0 0 6px; } h2 { font-size: 16px; margin: 0 0 10px; } h3 { font-size: 13px; margin: 16px 0 6px; }
+section { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin: 16px 0; }
+label { display: block; margin: 10px 0 4px; font-weight: 600; } label.inline { font-weight: 400; }
+input[type=text], input[type=password], input[type=email], input:not([type]), select, textarea {
+  width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; }
+textarea { font-family: ui-monospace, Menlo, monospace; }
+.popup textarea { font-family: inherit; margin-top: 8px; }
+button { border: 1px solid #d1d5db; background: #fff; border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px; }
+button.p { background: #111827; color: #fff; border-color: #111827; }
+.row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.muted { color: #6b7280; font-size: 12px; }
+.msg { font-size: 12px; } .ok { color: #15803d; } .bad { color: #b91c1c; }
+.top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.card { border: 1px solid #eee; border-radius: 8px; padding: 8px; margin: 6px 0; }
+.badge { display: inline-block; min-width: 28px; text-align: center; color: #fff; border-radius: 6px; padding: 2px 6px; font-weight: 700; }
+.badge.low { background: #16a34a; } .badge.medium { background: #d97706; } .badge.high { background: #dc2626; }
+code { background: #f3f4f6; padding: 1px 4px; border-radius: 4px; }

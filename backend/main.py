@@ -14,6 +14,10 @@ from app.routes.auth import router as auth_router
 from app.routes.social import router as social_router
 from app.routes.workspace import router as workspace_router
 from app.routes.ai import router as ai_router
+from app.routes.analytics import router as analytics_router
+from app.routes.governance import router as governance_router
+from app.routes.rag import router as rag_router
+from app.rag.store import get_store
 
 app = FastAPI(
     title="Plumbline API",
@@ -42,10 +46,14 @@ app.include_router(auth_router)
 app.include_router(social_router)
 app.include_router(workspace_router)
 app.include_router(ai_router)
+app.include_router(analytics_router)
+app.include_router(governance_router)
+app.include_router(rag_router)
 
 @app.on_event("startup")
 def on_startup():
     init_db()
+    get_store()  # creates rulebook tables (SQLite, or Postgres + pgvector when RAG_DATABASE_URL is set)
 
 @app.get("/")
 def read_root():

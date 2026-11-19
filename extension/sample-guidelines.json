@@ -1,0 +1,111 @@
+{
+  "id": "sample-guidelines",
+  "version": "v1",
+  "lastUpdated": "2026-11-14",
+  "updatedBy": "Plumbline demo",
+  "voice": {
+    "tones": [
+      "Warm",
+      "Confident",
+      "Plain-spoken"
+    ],
+    "customToneDescription": "We sound like a helpful senior student: friendly, factual, never hype-y. No ALL CAPS, max one emoji per post.",
+    "examplePositive": "Applications for the AI/DS fellowship are open until 30 November. Here's what the programme covers.",
+    "exampleNegative": "\ud83d\udd25\ud83d\udd25 BEST PROGRAM EVER!!! Don't miss out, guaranteed placement!!!",
+    "platformRules": {
+      "linkedin": "Professional and insight-led. No slang, no more than 3 hashtags.",
+      "instagram": "Conversational, short caption, up to 5 hashtags at the end.",
+      "x": "Concise, under 280 characters.",
+      "facebook": "Community-oriented and welcoming.",
+      "threads": "Casual and brief.",
+      "youtube": "Informative and friendly.",
+      "reddit": "Never promotional. Lead with useful information; disclose affiliation.",
+      "whatsapp": "Personal and short. No hashtags; one clear call to action.",
+      "telegram": "Clear announcement style. Short paragraphs, links at the end.",
+      "discord": "Friendly community tone. Keep it short; no mass pings.",
+      "bluesky": "Concise and conversational, under 300 characters.",
+      "medium": "Long-form and informative. Use headings; cite facts.",
+      "quora": "Answer the question first, then mention the brand only if relevant and disclose affiliation.",
+      "pinterest": "Descriptive and keyword-rich, one sentence plus a call to action.",
+      "tumblr": "Casual and creative; tags at the end.",
+      "generic": "Follow the general brand voice: clear, plain-spoken, verified facts only."
+    }
+  },
+  "terminology": [
+    {
+      "id": "t1",
+      "context": "Product name",
+      "bannedTerm": "Plumbine",
+      "preferredTerm": "Plumbline",
+      "explanation": "Always spell the product name correctly.",
+      "platforms": [
+        "all"
+      ]
+    },
+    {
+      "id": "t2",
+      "context": "Hiring outcomes",
+      "bannedTerm": "guaranteed placement",
+      "preferredTerm": "placement support",
+      "explanation": "We cannot promise jobs; legal requires 'placement support'.",
+      "platforms": [
+        "all"
+      ]
+    },
+    {
+      "id": "t3",
+      "context": "Audience",
+      "bannedTerm": "guys",
+      "preferredTerm": "everyone",
+      "explanation": "Use inclusive language.",
+      "platforms": [
+        "all"
+      ]
+    }
+  ],
+  "facts": [
+    {
+      "id": "f1",
+      "fact": "Plumbline checks posts against brand guidelines before they are published",
+      "source": "Product spec v2",
+      "category": "product",
+      "approvalStatus": "approved",
+      "approvalOwner": "PM",
+      "version": "v1",
+      "lastUpdated": "2026-11-01"
+    },
+    {
+      "id": "f2",
+      "fact": "Over 40 student clubs piloted Plumbline in 2026",
+      "source": "Pilot report, Oct 2026",
+      "category": "traction",
+      "approvalStatus": "approved",
+      "approvalOwner": "PM",
+      "version": "v1",
+      "lastUpdated": "2026-10-30"
+    },
+    {
+      "id": "f3",
+      "fact": "Plumbline reduces review time by 70%",
+      "source": "Early internal estimate",
+      "category": "metrics",
+      "approvalStatus": "pending",
+      "approvalOwner": "PM",
+      "version": "v1",
+      "lastUpdated": "2026-10-10"
+    }
+  ],
+  "colors": {
+    "primary": "#111827",
+    "secondary": "#6366f1",
+    "accent": "#f59e0b",
+    "background": "#ffffff"
+  },
+  "fonts": {
+    "heading": "Inter",
+    "body": "Inter"
+  },
+  "assets": [],
+  "rulebookDocuments": [],
+  "rulebookText": "Claims policy. Any number, percentage, ranking or award in a public post must match an approved fact in Brand Knowledge, including its source. Pending or outdated facts must not be published. Words such as best, number one, leading, first or guaranteed are treated as claims and need an approved fact. Partnerships may only be named after the partner has signed off in writing. Community policy. Reply to questions within 24 hours, never argue in public, and move account-specific issues to direct messages. Never share personal data of students in posts or replies."
+}

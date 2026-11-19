@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { CitationList } from '../../components/rag/CitationList';
 import { useNavigate } from 'react-router-dom';
 import {
   Upload,
@@ -62,7 +63,7 @@ export const CreatePostPage: React.FC = () => {
 
   // Audit state
   const [isAuditing, setIsAuditing] = useState(false);
-  const [aiAuditResult, setAiAuditResult] = useState<{ findings: any[]; score: any; isLiveAi: boolean } | null>(null);
+  const [aiAuditResult, setAiAuditResult] = useState<Awaited<ReturnType<typeof groqService.auditContent>> | null>(null);
   const [aiAuditError, setAiAuditError] = useState('');
   const [isGeneratingVariants, setIsGeneratingVariants] = useState(false);
 
@@ -91,7 +92,8 @@ export const CreatePostPage: React.FC = () => {
     try {
       const result = await groqService.auditContent(caption, selectedPlatforms, guidelines, Boolean(mediaFile), mediaAltText);
       setAiAuditResult(result);
-      if (!result.isLiveAi) setAiAuditError('Groq is not configured or the request failed. Showing the local rule-based audit instead.');
+      if (result.offline) setAiAuditError('Could not reach the Plumbline backend. Showing local rule checks without citations.');
+      else if (result.meta?.aiError) setAiAuditError(`${result.meta.aiError} Rule checks below are still cited.`);
     } catch (error) {
       setAiAuditError(error instanceof Error ? error.message : 'The AI audit failed.');
     } finally {
@@ -672,13 +674,37 @@ export const CreatePostPage: React.FC = () => {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-xs font-bold text-[#12201C]">Brand compliance audit</div>
-                <div className="text-[10px] text-stone-500">{auditResult.isLiveAi ? 'Groq AI review' : 'Local rule-based checks'}</div>
+                <div className="text-[10px] text-stone-500">
+                  {aiAuditResult?.meta
+                    ? `Grounded audit • ${aiAuditResult.meta.retrieval} • ${aiAuditResult.meta.documentChunks} rulebook passages indexed${aiAuditResult.meta.dropped ? ` • ${aiAuditResult.meta.dropped} uncited flag${aiAuditResult.meta.dropped === 1 ? '' : 's'} dropped` : ''}`
+                    : 'Live local rule checks. Run the grounded audit for AI findings with citations.'}
+                </div>
               </div>
-              <button type="button" onClick={handleRunGroqAudit} disabled={isAuditing || !caption.trim()} className="px-3 py-2 rounded-lg bg-[#0A4A3D] text-white text-[11px] font-semibold disabled:opacity-50">
-                {isAuditing ? 'Auditing…' : 'Run Groq audit'}
+              <button type="button" onClick={handleRunGroqAudit} disabled={isAuditing || !caption.trim()} className="px-3 py-2 rounded-lg bg-[#0A4A3D] text-white text-[11px] font-semibold disabled:opacity-50 shrink-0">
+                {isAuditing ? 'Auditing…' : 'Run grounded audit'}
               </button>
             </div>
             {aiAuditError && <p className="text-[11px] text-amber-700">{aiAuditError}</p>}
+            {aiAuditResult?.meta && (
+              aiAuditResult.findings.length === 0 ? (
+                <p className="text-[11px] text-[#167A58]">No issues found against your rules and rulebooks.</p>
+              ) : (
+                <div className="space-y-2">
+                  {aiAuditResult.findings.map(f => (
+                    <div key={f.id} className="p-2.5 rounded-xl border border-stone-200 bg-stone-50 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold text-[#12201C]">{f.issueTitle}</span>
+                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${f.severity === 'critical' ? 'bg-red-100 text-red-800' : f.severity === 'warning' ? 'bg-amber-100 text-amber-800' : 'bg-stone-200 text-stone-700'}`}>{f.severity}</span>
+                      </div>
+                      {f.affectedContent && <div className="text-[10px] font-mono text-red-900">Flagged: "{f.affectedContent}"</div>}
+                      {f.description && <p className="text-[11px] text-stone-700">{f.description}</p>}
+                      {f.suggestedCorrection && <p className="text-[11px] text-[#167A58]">Suggestion: {f.suggestedCorrection}</p>}
+                      <CitationList citations={f.citations} />
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
           </div>
           <BrandRiskScore score={auditResult.score} />
         </div>

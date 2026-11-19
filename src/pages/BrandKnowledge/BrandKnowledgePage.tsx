@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BookOpen,
   Plus,
@@ -17,18 +17,29 @@ import {
   Eye,
   Type,
   Palette,
-  Image as ImageIcon
+  Image as ImageIcon,
+  X
 } from 'lucide-react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Badge } from '../../components/common/Badge';
 import { Modal } from '../../components/common/Modal';
+import { RulebookManager } from '../../components/rag/RulebookManager';
 import {
   TerminologyRule,
   ApprovedFact,
   BrandAsset,
-  Platform
+  Platform,
+  AmbiguousRuleAlert,
+  RuleChange,
+  GuidelineVersionHistory
 } from '../../types';
+import { AmbiguousRuleAlerts, useRuleAlerts } from '../../components/governance/AmbiguousRuleAlerts';
+import { ChangeImpactPanel } from '../../components/governance/ChangeImpactPanel';
+import { RuleDiffList } from '../../components/governance/RuleDiffList';
+import { governanceService } from '../../services/governance/governanceService';
+import { BUILTIN_CHECKS } from '../../services/governance/ambiguity';
+import { checkedVersion, computeImpact, diffRules, termLabel } from '../../services/governance/versioning';
 
 export const BrandKnowledgePage: React.FC = () => {
   const navigate = useNavigate();
@@ -36,9 +47,13 @@ export const BrandKnowledgePage: React.FC = () => {
   const {
     guidelines,
     guidelineVersions,
+    posts,
     saveGuidelines,
-    restoreGuidelineVersion
+    restoreGuidelineVersion,
+    recheckPosts
   } = useWorkspace();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const ruleParam = searchParams.get('rule');
 
   const [activeTab, setActiveTab] = useState<
     'voice' | 'terminology' | 'facts' | 'colors' | 'assets' | 'documents' | 'versions'
@@ -51,6 +66,107 @@ export const BrandKnowledgePage: React.FC = () => {
   const [workingColors, setWorkingColors] = useState(guidelines.colors);
   const [workingFonts, setWorkingFonts] = useState(guidelines.fonts);
   const [workingAssets, setWorkingAssets] = useState<BrandAsset[]>(guidelines.assets);
+
+  // Reload the editable copy when a new version is saved or the shared workspace finishes loading.
+  useEffect(() => {
+    setWorkingVoice(guidelines.voice);
+    setWorkingTerminology(guidelines.terminology);
+    setWorkingFacts(guidelines.facts);
+    setWorkingColors(guidelines.colors);
+    setWorkingFonts(guidelines.fonts);
+    setWorkingAssets(guidelines.assets);
+  }, [guidelines.version, guidelines.lastUpdated]);
+
+  // Last saved version and its rule changes; the impact is recomputed from live posts so re-checks update it.
+  const [lastSave, setLastSave] = useState<{ version: string; changes: RuleChange[] } | null>(null);
+  const [alertsRefreshKey, setAlertsRefreshKey] = useState(0);
+  const { alerts: openAlerts } = useRuleAlerts(alertsRefreshKey);
+  const disputedRuleIds = new Set(openAlerts.map(alert => alert.ruleId));
+
+  // Rule clarification opened from an ambiguity alert (?rule=<id>)
+  const [focusAlert, setFocusAlert] = useState<AmbiguousRuleAlert | null>(null);
+  const [clarifyText, setClarifyText] = useState('');
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
+  const [editingTermId, setEditingTermId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!ruleParam) { setFocusAlert(null); return; }
+    const tab = ruleParam === 'check:unsupported_claim' ? 'facts' : ruleParam.startsWith('check:') ? 'voice' : 'terminology';
+    setActiveTab(tab);
+    let active = true;
+    governanceService.loadAlerts(posts, guidelines, true).then(result => {
+      if (!active) return;
+      const alert = result.alerts.find(item => item.ruleId === ruleParam) || null;
+      const rule = guidelines.terminology.find(item => item.id === ruleParam);
+      setFocusAlert(alert);
+      setClarifyText(alert?.suggestion?.proposedText || rule?.explanation || '');
+    });
+    const timer = window.setTimeout(() => {
+      const target = document.getElementById(`rule-row-${ruleParam}`) || document.getElementById('rule-clarify-panel');
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 300);
+    return () => { active = false; window.clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ruleParam]);
+
+  const focusRule = ruleParam ? guidelines.terminology.find(item => item.id === ruleParam) : undefined;
+  const focusLabel = focusAlert?.label || (focusRule ? termLabel(focusRule) : BUILTIN_CHECKS[ruleParam || '']?.label) || ruleParam || '';
+
+  const closeClarification = () => {
+    searchParams.delete('rule');
+    setSearchParams(searchParams);
+  };
+
+  const workingGuidelines = (terminology = workingTerminology) => ({
+    ...guidelines,
+    voice: workingVoice,
+    terminology,
+    facts: workingFacts,
+    colors: workingColors,
+    fonts: workingFonts,
+    assets: workingAssets
+  });
+
+  const handleRegenerateSuggestion = async () => {
+    if (!focusAlert) return;
+    setIsSuggesting(true);
+    const suggestion = await governanceService.suggest(focusAlert);
+    setFocusAlert({ ...focusAlert, suggestion });
+    setClarifyText(suggestion.proposedText);
+    setIsSuggesting(false);
+  };
+
+  const handleSaveClarification = async () => {
+    if (!ruleParam || !focusRule || !clarifyText.trim()) return;
+    const terminology = workingTerminology.map(rule => rule.id === ruleParam ? { ...rule, explanation: clarifyText.trim() } : rule);
+    setWorkingTerminology(terminology);
+    const result = saveGuidelines(workingGuidelines(terminology), `Clarified rule ${termLabel(focusRule)} after repeated disputes.`);
+    await governanceService.resolve(ruleParam, result.version, 'Clarified in the guideline editor');
+    setLastSave({ version: result.version, changes: result.changes });
+    setAlertsRefreshKey(key => key + 1);
+    closeClarification();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleResolveWithoutEdit = async () => {
+    if (!ruleParam) return;
+    await governanceService.resolve(ruleParam, guidelines.version, 'Marked resolved from the guideline editor');
+    setAlertsRefreshKey(key => key + 1);
+    closeClarification();
+  };
+
+  const handleRecheck = (postIds: string[]) => {
+    const count = recheckPosts(postIds);
+    if (count === 0) alert('Nothing to re-check. Only drafts and reviews still in progress can be re-checked.');
+  };
+
+  const versionChanges = (ver: GuidelineVersionHistory, index: number): RuleChange[] | null => {
+    if (ver.ruleChanges && (ver.ruleChanges.length > 0 || index === guidelineVersions.length - 1)) return ver.ruleChanges;
+    const previous = guidelineVersions[index + 1];
+    if (ver.snapshot && previous?.snapshot) return diffRules(previous.snapshot, ver.snapshot);
+    return ver.ruleChanges || null;
+  };
 
   // Modals
   const [saveModalOpen, setSaveModalOpen] = useState(false);
@@ -72,26 +188,24 @@ export const BrandKnowledgePage: React.FC = () => {
 
   const handleSaveNewVersionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    saveGuidelines(
-      {
-        ...guidelines,
-        voice: workingVoice,
-        terminology: workingTerminology,
-        facts: workingFacts,
-        colors: workingColors,
-        fonts: workingFonts,
-        assets: workingAssets
-      },
-      changeSummary || 'Updated terminology and verified facts.'
-    );
+    const result = saveGuidelines(workingGuidelines(), changeSummary || 'Updated terminology and verified facts.');
     setSaveModalOpen(false);
     setChangeSummary('');
-    alert(`Successfully published new Brand Guidelines version! Historical reviews remain locked to their original version.`);
+    setLastSave({ version: result.version, changes: result.changes });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleAddTerm = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPreferred || !newBanned) return;
+
+    if (editingTermId) {
+      setWorkingTerminology(workingTerminology.map(rule => rule.id === editingTermId ? {
+        ...rule, context: newContext || 'General', preferredTerm: newPreferred, bannedTerm: newBanned, explanation: newExplanation
+      } : rule));
+      closeTermModal();
+      return;
+    }
 
     const newRule: TerminologyRule = {
       id: `term-${Date.now()}`,
@@ -104,6 +218,24 @@ export const BrandKnowledgePage: React.FC = () => {
 
     setWorkingTerminology([...workingTerminology, newRule]);
     setAddTermModalOpen(false);
+    setNewContext('');
+    setNewPreferred('');
+    setNewBanned('');
+    setNewExplanation('');
+  };
+
+  const openEditTerm = (rule: TerminologyRule) => {
+    setEditingTermId(rule.id);
+    setNewContext(rule.context);
+    setNewPreferred(rule.preferredTerm);
+    setNewBanned(rule.bannedTerm);
+    setNewExplanation(rule.explanation);
+    setAddTermModalOpen(true);
+  };
+
+  const closeTermModal = () => {
+    setAddTermModalOpen(false);
+    setEditingTermId(null);
     setNewContext('');
     setNewPreferred('');
     setNewBanned('');
@@ -155,7 +287,11 @@ export const BrandKnowledgePage: React.FC = () => {
 
   const handleRestoreVersion = (version: string) => {
     if (confirm(`Restore rules from ${version}? A new version will be created to record this restoration.`)) {
-      restoreGuidelineVersion(version);
+      const result = restoreGuidelineVersion(version);
+      if (result) {
+        setLastSave({ version: result.version, changes: result.changes });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     }
   };
 
@@ -207,6 +343,130 @@ export const BrandKnowledgePage: React.FC = () => {
         </div>
       </div>
 
+      {lastSave && (
+        <ChangeImpactPanel
+          impact={computeImpact(posts, lastSave.changes, lastSave.version)}
+          onRecheck={handleRecheck}
+          onClose={() => setLastSave(null)}
+        />
+      )}
+
+      {!ruleParam && (
+        <AmbiguousRuleAlerts
+          compact
+          refreshKey={alertsRefreshKey}
+          onOpenRule={alert => setSearchParams({ rule: alert.ruleId })}
+        />
+      )}
+
+      {ruleParam && (
+        <div id="rule-clarify-panel" className="bg-white rounded-2xl p-6 border-2 border-amber-300 shadow-plumb-subtle space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-[#12201C] flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-[#B45309]" />
+                Clarify rule: {focusLabel}
+              </h3>
+              <p className="text-xs text-[#68756F]">
+                {focusAlert
+                  ? `Disputed ${focusAlert.disputeCount} of ${focusAlert.flagCount} flags (${Math.round(focusAlert.disputeRate * 100)}%). Saving creates a new guideline version and resolves the alert.`
+                  : 'No open ambiguity alert for this rule. You can still edit and save it as a new version.'}
+              </p>
+            </div>
+            <button onClick={closeClarification} className="p-1 text-stone-400 hover:text-stone-700" title="Close">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {focusAlert && focusAlert.topReasons.length > 0 && (
+            <div className="text-xs">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-[#68756F] mb-1">Why people disputed it</div>
+              <ul className="space-y-0.5">
+                {focusAlert.topReasons.map(item => (
+                  <li key={item.reason} className="text-stone-700">"{item.reason}" <span className="text-stone-400">x{item.count}</span></li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {focusAlert?.suggestion && focusAlert.suggestion.notes.length > 0 && (
+            <ul className="list-disc pl-4 text-[11px] text-stone-600 space-y-0.5">
+              {focusAlert.suggestion.notes.map(note => <li key={note}>{note}</li>)}
+            </ul>
+          )}
+
+          {focusRule ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-stone-50 border border-stone-200">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-[#68756F] mb-1">Current wording ({guidelines.version})</div>
+                  <p className="text-stone-700">{focusRule.explanation || '(no explanation)'}</p>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#167A58] mb-1">
+                    Clarified wording {focusAlert?.suggestion && `(suggested by ${focusAlert.suggestion.source === 'groq' ? 'Groq AI' : 'rule-based helper'}, edit freely)`}
+                  </label>
+                  <textarea
+                    rows={5}
+                    value={clarifyText}
+                    onChange={e => setClarifyText(e.target.value)}
+                    className="w-full p-3 text-xs rounded-xl border border-emerald-200 bg-emerald-50/20 focus:outline-none focus:ring-2 focus:ring-[#0A4A3D]"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                {focusAlert && (
+                  <button
+                    onClick={handleRegenerateSuggestion}
+                    disabled={isSuggesting}
+                    className="px-3 py-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-xs font-semibold text-stone-700 flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    {isSuggesting ? 'Generating...' : 'Regenerate suggestion'}
+                  </button>
+                )}
+                <button
+                  onClick={() => openEditTerm(focusRule)}
+                  className="px-3 py-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-xs font-semibold text-stone-700 flex items-center gap-1.5"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Edit terms too
+                </button>
+                <button
+                  onClick={handleSaveClarification}
+                  disabled={!clarifyText.trim()}
+                  className="px-4 py-2 rounded-xl bg-[#0A4A3D] hover:bg-[#063028] text-white text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  Save clarification as new version
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-3 text-xs">
+              {focusAlert?.suggestion && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[#12201C]">
+                  <span className="font-bold text-[#167A58]">Suggested clarification: </span>{focusAlert.suggestion.proposedText}
+                </div>
+              )}
+              <p className="text-stone-600">
+                {ruleParam.startsWith('check:')
+                  ? 'This check is built into the auditor. Add the missing approved fact or voice guidance in this tab, save a new version, then mark the alert resolved.'
+                  : 'This rule no longer exists in the current guidelines.'}
+              </p>
+              <div className="flex justify-end">
+                <button
+                  onClick={handleResolveWithoutEdit}
+                  className="px-4 py-2 rounded-xl bg-[#0A4A3D] hover:bg-[#063028] text-white text-xs font-semibold"
+                >
+                  Mark resolved
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Tabs Navigation */}
       <div className="flex items-center gap-1.5 overflow-x-auto border-b border-stone-200 pb-2">
         {[
@@ -215,7 +475,7 @@ export const BrandKnowledgePage: React.FC = () => {
           { id: 'facts', label: 'Approved Facts', icon: CheckCircle },
           { id: 'colors', label: 'Colours and Fonts', icon: Palette },
           { id: 'assets', label: 'Logos and Assets', icon: ImageIcon },
-          { id: 'documents', label: 'Rulebook PDF', icon: FileText },
+          { id: 'documents', label: 'Rulebooks', icon: FileText },
           { id: 'versions', label: 'Version History', icon: History }
         ].map(tab => {
           const Icon = tab.icon;
@@ -357,12 +617,34 @@ export const BrandKnowledgePage: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-stone-100">
                   {workingTerminology.map(term => (
-                    <tr key={term.id} className="hover:bg-stone-50/50">
-                      <td className="py-3 px-3 font-semibold text-[#12201C]">{term.context}</td>
+                    <tr
+                      key={term.id}
+                      id={`rule-row-${term.id}`}
+                      className={ruleParam === term.id ? 'bg-amber-50 outline outline-2 outline-amber-400' : 'hover:bg-stone-50/50'}
+                    >
+                      <td className="py-3 px-3 font-semibold text-[#12201C]">
+                        {term.context}
+                        {disputedRuleIds.has(term.id) && (
+                          <button
+                            onClick={() => setSearchParams({ rule: term.id })}
+                            className="ml-2 text-[10px] font-bold text-[#B45309] bg-amber-100 px-1.5 py-0.5 rounded"
+                            title="This rule is disputed often. Click to clarify it."
+                          >
+                            ambiguous
+                          </button>
+                        )}
+                      </td>
                       <td className="py-3 px-3 font-bold text-[#167A58]">{term.preferredTerm}</td>
                       <td className="py-3 px-3 font-bold text-[#C2413B] line-through">{term.bannedTerm}</td>
                       <td className="py-3 px-3 text-stone-600 max-w-sm">{term.explanation}</td>
-                      <td className="py-3 px-3 text-right">
+                      <td className="py-3 px-3 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => openEditTerm(term)}
+                          className="p-1 text-stone-400 hover:text-[#0A4A3D] transition-colors"
+                          title="Edit term"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => handleDeleteTerm(term.id)}
                           className="p-1 text-stone-400 hover:text-red-600 transition-colors"
@@ -566,41 +848,10 @@ export const BrandKnowledgePage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 6: Rulebook PDF */}
+      {/* TAB 6: Rulebooks (Improvement 1: parsed, indexed and cited) */}
       {activeTab === 'documents' && (
         <div className="space-y-6 animate-in fade-in">
-          <div className="bg-white rounded-2xl p-6 border border-stone-200 shadow-plumb-subtle space-y-5">
-            <div>
-              <h3 className="text-base font-bold text-[#12201C]">Brand Rulebook Source Documents</h3>
-              <p className="text-xs text-[#68756F]">
-                Documents attached to the workspace. Automatic document parsing is not enabled in this test build.
-              </p>
-            </div>
-
-            {guidelines.rulebookDocuments.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-6 text-center text-xs text-stone-600">
-                No documents have been added. Add verified facts and terminology in the other Brand Knowledge tabs; document parsing is not yet available.
-              </div>
-            ) : <div className="space-y-3">
-              {guidelines.rulebookDocuments.map(doc => (
-                <div key={doc.id} className="p-4 rounded-xl border border-stone-200 bg-stone-50 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <FileText className="w-6 h-6 text-[#0A4A3D]" />
-                    <div>
-                      <div className="text-xs font-bold text-[#12201C]">{doc.filename}</div>
-                      <div className="text-[11px] text-stone-500">
-                        {doc.size} • Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </div>
-
-                  <span className="text-xs font-semibold text-[#167A58] bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                    Attached
-                  </span>
-                </div>
-              ))}
-            </div>}
-          </div>
+          <RulebookManager canEdit={['owner', 'admin', 'manager'].includes(currentRole)} />
         </div>
       )}
 
@@ -616,8 +867,15 @@ export const BrandKnowledgePage: React.FC = () => {
             </div>
 
             <div className="divide-y divide-stone-100">
-              {guidelineVersions.map(ver => (
-                <div key={ver.version} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              {guidelineVersions.length === 0 && (
+                <p className="py-4 text-xs text-stone-500">No versions saved yet. Save a change to start the history.</p>
+              )}
+              {guidelineVersions.map((ver, index) => {
+                const changes = versionChanges(ver, index);
+                const reviewsChecked = posts.filter(post => checkedVersion(post) === ver.version).length;
+                return (
+                <div key={ver.id || ver.version} className="py-4 space-y-3 text-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm text-[#0A4A3D] bg-emerald-50 px-2 py-0.5 rounded">
@@ -632,19 +890,37 @@ export const BrandKnowledgePage: React.FC = () => {
                       </span>
                     </div>
                     <p className="text-stone-700 max-w-2xl">{ver.summary}</p>
+                    <p className="text-[11px] text-[#68756F]">
+                      {changes ? `${changes.length} rule change${changes.length === 1 ? '' : 's'}` : 'Rule snapshot not recorded'}
+                      {' · '}{reviewsChecked} review{reviewsChecked === 1 ? '' : 's'} checked against this version
+                    </p>
                   </div>
 
-                  {ver.version !== guidelines.version && (
-                    <button
-                      onClick={() => handleRestoreVersion(ver.version)}
-                      className="px-3.5 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 text-xs font-semibold text-stone-700 flex items-center gap-1.5 self-start sm:self-auto"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5 text-[#0A4A3D]" />
-                      Restore this version
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    {changes && (
+                      <button
+                        onClick={() => setExpandedVersion(expandedVersion === ver.version ? null : ver.version)}
+                        className="px-3.5 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 text-xs font-semibold text-stone-700 flex items-center gap-1.5"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-[#0A4A3D]" />
+                        {expandedVersion === ver.version ? 'Hide changes' : 'View changes'}
+                      </button>
+                    )}
+                    {ver.version !== guidelines.version && ver.snapshot && (
+                      <button
+                        onClick={() => handleRestoreVersion(ver.version)}
+                        className="px-3.5 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 text-xs font-semibold text-stone-700 flex items-center gap-1.5"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-[#0A4A3D]" />
+                        Restore this version
+                      </button>
+                    )}
+                  </div>
                 </div>
-              ))}
+                {expandedVersion === ver.version && changes && <RuleDiffList changes={changes} />}
+                </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -697,9 +973,9 @@ export const BrandKnowledgePage: React.FC = () => {
       {/* Add Term Modal */}
       <Modal
         isOpen={addTermModalOpen}
-        onClose={() => setAddTermModalOpen(false)}
-        title="Add Terminology Rule"
-        subtitle="Define preferred phrasing and disallowed vocabulary."
+        onClose={closeTermModal}
+        title={editingTermId ? 'Edit Terminology Rule' : 'Add Terminology Rule'}
+        subtitle={editingTermId ? 'Changes apply when you save a new guidelines version.' : 'Define preferred phrasing and disallowed vocabulary.'}
       >
         <form onSubmit={handleAddTerm} className="space-y-3.5">
           <div>
@@ -752,7 +1028,7 @@ export const BrandKnowledgePage: React.FC = () => {
           <div className="pt-2 flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setAddTermModalOpen(false)}
+              onClick={closeTermModal}
               className="px-4 py-2 text-xs font-semibold text-stone-600"
             >
               Cancel
@@ -761,7 +1037,7 @@ export const BrandKnowledgePage: React.FC = () => {
               type="submit"
               className="px-5 py-2 rounded-xl bg-[#0A4A3D] text-white text-xs font-semibold"
             >
-              Add Term
+              {editingTermId ? 'Update Term' : 'Add Term'}
             </button>
           </div>
         </form>

@@ -6,6 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from app.routes.auth import require_user
 
+# Groq shut these down on 2026-08-16; map old .env values to the recommended replacements.
+RETIRED_MODELS = {"llama-3.3-70b-versatile": "openai/gpt-oss-120b", "llama-3.1-8b-instant": "openai/gpt-oss-20b"}
+
+
+def resolve_model(model: str | None) -> str:
+    chosen = (model or os.getenv("GROQ_MODEL", "") or "openai/gpt-oss-120b").strip()
+    return RETIRED_MODELS.get(chosen, chosen)
+
+
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 class ChatBody(BaseModel):
@@ -17,12 +26,12 @@ class ChatBody(BaseModel):
 
 @router.get("/status")
 async def ai_status(user: dict = Depends(require_user)):
-    return {"configured": bool(os.getenv("GROQ_API_KEY")), "model": os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")}
+    return {"configured": bool(os.getenv("GROQ_API_KEY")), "model": resolve_model(None)}
 
 @router.post("/test")
 async def ai_test(user: dict = Depends(require_user)):
     key = os.getenv("GROQ_API_KEY", "").strip()
-    model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+    model = resolve_model(None)
     if not key:
         raise HTTPException(status_code=503, detail="GROQ_API_KEY is not configured in backend/.env.")
     async with httpx.AsyncClient(timeout=45) as client:
@@ -44,7 +53,7 @@ async def chat_completions(body: ChatBody, user: dict = Depends(require_user)):
     key = os.getenv("GROQ_API_KEY", "").strip()
     if not key:
         raise HTTPException(status_code=503, detail="GROQ_API_KEY is not configured in backend/.env.")
-    model = body.model or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    model = resolve_model(body.model)
     async with httpx.AsyncClient(timeout=90) as client:
         response = await client.post(
             "https://api.groq.com/openai/v1/chat/completions",

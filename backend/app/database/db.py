@@ -93,5 +93,63 @@ def init_db() -> None:
                 reply_count INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY(user_id, platform, id)
             );
+            CREATE TABLE IF NOT EXISTS guideline_versions (
+                id TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL,
+                version_number INTEGER NOT NULL,
+                rules_json TEXT NOT NULL,
+                change_summary TEXT NOT NULL DEFAULT '',
+                created_by TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                UNIQUE(workspace_id, version_number)
+            );
+            CREATE TABLE IF NOT EXISTS guideline_rule_changes (
+                id TEXT PRIMARY KEY,
+                version_id TEXT NOT NULL REFERENCES guideline_versions(id) ON DELETE CASCADE,
+                workspace_id TEXT NOT NULL,
+                rule_id TEXT NOT NULL,
+                rule_kind TEXT NOT NULL,
+                rule_label TEXT NOT NULL DEFAULT '',
+                change_type TEXT NOT NULL,
+                fields_json TEXT NOT NULL DEFAULT '[]',
+                before_json TEXT,
+                after_json TEXT
+            );
+            CREATE INDEX IF NOT EXISTS ix_rule_changes_version ON guideline_rule_changes(version_id);
+            CREATE TABLE IF NOT EXISTS rule_disputes (
+                id TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL,
+                rule_id TEXT NOT NULL,
+                rule_label TEXT NOT NULL DEFAULT '',
+                post_id TEXT NOT NULL DEFAULT '',
+                finding_id TEXT NOT NULL,
+                reason TEXT NOT NULL DEFAULT '',
+                guideline_version TEXT NOT NULL DEFAULT '',
+                disputed_by TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                UNIQUE(workspace_id, finding_id)
+            );
+            CREATE INDEX IF NOT EXISTS ix_rule_disputes_rule ON rule_disputes(workspace_id, rule_id);
+            CREATE TABLE IF NOT EXISTS rule_alerts (
+                workspace_id TEXT NOT NULL,
+                rule_id TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open',
+                suggestion_json TEXT,
+                closed_at TEXT,
+                resolved_version TEXT,
+                updated_by TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY(workspace_id, rule_id)
+            );
             """
         )
+        # Columns added after the first release of a table go here so older local databases keep working.
+        add_column_if_missing(db, "rule_alerts", "resolution_note", "TEXT NOT NULL DEFAULT ''")
+        # Governance Insights: team (department) for error-rate-by-team
+        add_column_if_missing(db, "users", "department", "TEXT NOT NULL DEFAULT ''")
+
+
+def add_column_if_missing(db: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    existing = {row["name"] for row in db.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in existing:
+        db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")

@@ -5,6 +5,7 @@ import {
   Platform,
   PostPlatformVariant
 } from '../types';
+import { termLabel } from './governance/versioning';
 
 export interface AuditResult {
   findings: AuditFinding[];
@@ -38,7 +39,8 @@ export class AIAuditEngine {
         sourceReference: `Your terminology rules${rule.context ? ` → ${rule.context}` : ''}`,
         guidelineVersion: guidelines.version,
         suggestedCorrection: rule.preferredTerm || 'Review this phrase against your brand terminology policy.',
-        confidence: 1, status: 'open'
+        confidence: 1, status: 'open',
+        ruleId: rule.id, ruleLabel: termLabel(rule)
       });
     });
 
@@ -62,7 +64,8 @@ export class AIAuditEngine {
         sourceReference: `Approved facts in your workspace (${guidelines.version})`,
         guidelineVersion: guidelines.version,
         suggestedCorrection: 'Add a verified supporting fact and source, or remove/rephrase the claim.',
-        confidence: 0.75, status: 'open'
+        confidence: 0.75, status: 'open',
+        ruleId: 'check:unsupported_claim', ruleLabel: 'Unsupported claims check'
       });
     });
 
@@ -74,7 +77,8 @@ export class AIAuditEngine {
         affectedContent: 'Attached media',
         sourceReference: 'Accessibility review', guidelineVersion: guidelines.version,
         suggestedCorrection: 'Describe the important subject, action, and any essential text shown in the image.',
-        confidence: 1, status: 'open'
+        confidence: 1, status: 'open',
+        ruleId: 'check:alt_text_missing', ruleLabel: 'Media alt text check'
       });
     }
 

@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Plumbline Brand Guard · Settings</title>
+<link rel="stylesheet" href="ui.css"></head>
+<body class="page">
+<h1>Plumbline Brand Guard</h1>
+<p class="muted">Runs Plumbline's brand audit inside apps the main app can't publish to. Keys stay in this browser's extension storage and are only sent to the provider they belong to.</p>
+
+<section>
+  <h2>1 · Free API keys</h2>
+  <label>Groq API key <a href="https://console.groq.com/keys" target="_blank">get one free</a></label>
+  <input id="groqKey" type="password" placeholder="gsk_...">
+  <label>Groq model</label>
+  <select id="groqModel">
+    <option value="openai/gpt-oss-20b">openai/gpt-oss-20b (fastest)</option>
+    <option value="openai/gpt-oss-120b">openai/gpt-oss-120b (smartest)</option>
+    <option value="qwen/qwen3.8-27b">qwen/qwen3.8-27b</option>
+  </select>
+  <label>Gemini API key <a href="https://aistudio.google.com/api-keys" target="_blank">get one free</a> <span class="muted">(fallback LLM + embeddings for RAG)</span></label>
+  <input id="geminiKey" type="password" placeholder="AIza...">
+  <label>Gemini model</label>
+  <select id="geminiModel">
+    <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
+  </select>
+  <label class="inline"><input id="disableEmbeddings" type="checkbox"> Keyword-only retrieval (skip embeddings)</label>
+  <label class="inline"><input id="autoCheck" type="checkbox"> Live suggestions while I type in the app (AI check runs after a pause, max once per 10s)</label>
+  <div class="row"><button id="saveKeys" class="p">Save keys</button><button id="testKeys">Test keys</button></div>
+  <p id="keysMsg" class="msg"></p>
+</section>
+
+<section>
+  <h2>2 · Brand guidelines</h2>
+  <p id="glStatus" class="muted"></p>
+  <h3>Sync from your Plumbline workspace</h3>
+<label>Backend URL</label>
+<input id="backendUrl" value="https://plumbline-gqa2.onrender.com">
+  <div id="loginBox">
+    <label>Plumbline email</label><input id="email" type="email">
+    <label>Plumbline password</label><input id="password" type="password">
+    <div class="row"><button id="login" class="p">Sign in &amp; sync</button></div>
+  </div>
+  <div id="loggedBox" hidden>
+    <p>Signed in as <b id="who"></b></p>
+    <div class="row"><button id="sync" class="p">Sync now</button><button id="logout">Sign out</button></div>
+  </div>
+  <p id="syncMsg" class="msg"></p>
+
+  <h3>…or edit them here</h3>
+  <p class="muted">Same JSON shape as Plumbline's <code>BrandGuidelines</code>. Add <code>rulebookText</code> (or paste below) to index long policy docs for RAG.</p>
+  <textarea id="glJson" rows="14" spellcheck="false"></textarea>
+  <label>Rulebook / policy text (chunked and indexed)</label>
+  <textarea id="rulebook" rows="6" placeholder="Paste your brand book, legal claims policy, FAQ…"></textarea>
+  <div class="row"><button id="saveGl" class="p">Save guidelines</button><button id="loadSample">Load sample</button></div>
+  <p id="glMsg" class="msg"></p>
+</section>
+<script type="module" src="options.js"></script>
+</body></html>

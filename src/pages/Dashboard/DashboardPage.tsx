@@ -9,7 +9,6 @@ import {
   ArrowRight,
   MessageSquare,
   Share2,
-  Users,
   BookOpen,
   ShieldCheck
 } from 'lucide-react';
@@ -17,6 +16,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { Badge } from '../../components/common/Badge';
 import { ExtensionSetupCard } from '../../components/common/ExtensionSetupCard';
+import { TeamManagementPanel } from '../../components/insights/TeamManagementPanel';
+import { ApprovalTimeCard } from '../../components/governance/ApprovalTimeCard';
+import { AmbiguousRuleAlerts } from '../../components/governance/AmbiguousRuleAlerts';
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -25,8 +27,7 @@ export const DashboardPage: React.FC = () => {
     posts,
     guidelines,
     comments,
-    channels,
-    teamMembers
+    channels
   } = useWorkspace();
 
   // Compute stats
@@ -138,6 +139,16 @@ export const DashboardPage: React.FC = () => {
           </div>
           <div className="mt-2 text-2xl font-bold text-[#167A58]">{readyToPublishCount}</div>
           <p className="text-[11px] text-stone-500 mt-1">Approved by compliance reviewer</p>
+        </div>
+      </div>
+
+      {/* Review governance: approval timing and rules that need clarifying */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-4">
+          <ApprovalTimeCard posts={posts} />
+        </div>
+        <div className="lg:col-span-8">
+          <AmbiguousRuleAlerts />
         </div>
       </div>
 
@@ -301,45 +312,9 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* C. My Team (Managers Only) */}
+          {/* C. Team management (Managers Only) */}
           {(currentRole === 'owner' || currentRole === 'manager' || currentRole === 'admin') && (
-            <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-plumb-subtle">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-base font-bold text-[#12201C] flex items-center gap-2">
-                    <Users className="w-5 h-5 text-[#0A4A3D]" />
-                    My Team
-                  </h2>
-                  <p className="text-xs text-[#68756F]">
-                    People with access to this workspace.
-                  </p>
-                </div>
-
-              </div>
-
-              <p className="text-[11px] text-stone-600 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 mb-3">To add a colleague, share the Workspace ID shown on Profile. They can join during registration.</p>
-              {teamMembers.length === 0 && <p className="text-xs text-stone-500 py-3">No other users have joined this workspace yet.</p>}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {teamMembers.map(member => (
-                  <div
-                    key={member.id}
-                    className="p-3.5 rounded-xl border border-stone-200 bg-stone-50/50 flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="text-xs font-bold text-[#12201C]">{member.name}</div>
-                      <div className="text-[11px] text-[#68756F]">{member.email}</div>
-                      <div className="text-[10px] text-stone-500 mt-1 capitalize">{member.role}</div>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-[#167A58]">
-                        {member.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <TeamManagementPanel compact />
           )}
         </div>
 

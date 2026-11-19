@@ -188,6 +188,7 @@ class WorkspaceStorage {
     if (!post) return;
     post.findings = post.findings.map(finding => finding.id === findingId ? {
       ...finding, status,
+      statusUpdatedAt: new Date().toISOString(),
       userAction: status === 'accepted' ? 'accepted' : status === 'rejected' ? 'rejected' : 'contested',
       contestedReason: contestedReason || finding.contestedReason
     } : finding);
@@ -198,6 +199,20 @@ class WorkspaceStorage {
     const score = Math.min(100, critical * 30 + warning * 10 + suggestion * 5);
     post.brandRiskScore = { ...post.brandRiskScore, overallScore: score, riskCategory: score > 50 ? 'high' : score > 20 ? 'medium' : 'low', criticalCount: critical, warningCount: warning, suggestionCount: suggestion };
     post.updatedAt = new Date().toISOString();
+    this.updatePost(post);
+  }
+
+  disputeFinding(postId: string, findingId: string, details: { reason: string; ruleId: string; ruleLabel: string; disputedBy: string; disputedAt: string }): void {
+    this.updateFindingStatus(postId, findingId, 'contested', details.reason);
+    const post = this.getPostById(postId);
+    if (!post) return;
+    post.findings = post.findings.map(finding => finding.id === findingId ? {
+      ...finding,
+      ruleId: details.ruleId,
+      ruleLabel: details.ruleLabel,
+      disputedBy: details.disputedBy,
+      disputedAt: details.disputedAt
+    } : finding);
     this.updatePost(post);
   }
 

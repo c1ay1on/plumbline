@@ -1,0 +1,2 @@
+/* All Plumbline UI lives inside a shadow root; this only keeps the host out of page layout. */
+#plumbline-host { position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 2147483647; }

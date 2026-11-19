@@ -16,6 +16,7 @@ import { GrowthPage } from './pages/Growth/GrowthPage';
 import { ChannelsPage } from './pages/Channels/ChannelsPage';
 import { ProfilePage } from './pages/Profile/ProfilePage';
 import { BrandKnowledgePage } from './pages/BrandKnowledge/BrandKnowledgePage';
+import { GovernanceInsightsPage } from './pages/Insights/GovernanceInsightsPage';
 
 const ProtectedLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -41,6 +42,7 @@ export const App: React.FC = () => (
             <Route path="channels" element={<ChannelsPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="brand-knowledge" element={<BrandKnowledgePage />} />
+            <Route path="insights" element={<GovernanceInsightsPage />} />
           </Route>
           <Route path="/onboarding" element={<ProtectedLayout><OnboardingPage /></ProtectedLayout>} />
           <Route path="/brand-setup" element={<ProtectedLayout><BrandSetupPage /></ProtectedLayout>} />

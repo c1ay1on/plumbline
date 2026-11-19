@@ -8,7 +8,16 @@ interface BrandRiskScoreProps {
 }
 
 export const BrandRiskScore: React.FC<BrandRiskScoreProps> = ({ score, compact = false }) => {
-  const { overallScore, riskCategory, breakdown, criticalCount, warningCount, suggestionCount } = score;
+  // Older or imported posts can carry a partial score; fall back to safe defaults instead of crashing.
+  const overallScore = score?.overallScore ?? 0;
+  const riskCategory: IBrandRiskScore['riskCategory'] =
+    score?.riskCategory ?? (overallScore > 50 ? 'high' : overallScore > 20 ? 'medium' : 'low');
+  const breakdown = score?.breakdown ?? {
+    unsupportedClaims: 0, visualAssets: 0, messagingViolations: 0, terminology: 0, accessibility: 0, toneInconsistencies: 0
+  };
+  const criticalCount = score?.criticalCount ?? 0;
+  const warningCount = score?.warningCount ?? 0;
+  const suggestionCount = score?.suggestionCount ?? 0;
 
   const getRiskColor = (cat: 'low' | 'medium' | 'high') => {
     switch (cat) {

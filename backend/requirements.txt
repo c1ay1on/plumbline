@@ -5,3 +5,7 @@ pydantic>=2.6.0
 python-dotenv>=1.0.1
 httpx>=0.27.0
 email-validator>=2.1.0
+pypdf>=4.2.0
+python-multipart>=0.0.9
+# Optional: only needed when RAG_DATABASE_URL points at Postgres (Supabase) with pgvector
+# psycopg[binary]>=3.1
