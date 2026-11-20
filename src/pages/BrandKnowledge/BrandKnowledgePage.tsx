@@ -66,6 +66,7 @@ export const BrandKnowledgePage: React.FC = () => {
   const [workingColors, setWorkingColors] = useState(guidelines.colors);
   const [workingFonts, setWorkingFonts] = useState(guidelines.fonts);
   const [workingAssets, setWorkingAssets] = useState<BrandAsset[]>(guidelines.assets);
+  const canEditAssets = ['owner', 'admin', 'manager'].includes(currentRole);
 
   // Reload the editable copy when a new version is saved or the shared workspace finishes loading.
   useEffect(() => {
@@ -185,6 +186,37 @@ export const BrandKnowledgePage: React.FC = () => {
   const [newFactSource, setNewFactSource] = useState('');
   const [newFactCategory, setNewFactCategory] = useState('Accreditation');
   const [newFactOwner, setNewFactOwner] = useState('Content owner');
+
+  const [assetError, setAssetError] = useState('');
+
+  const handleAssetUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    setAssetError('');
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) { setAssetError(`${file.name} is not an image.`); continue; }
+      if (file.size > 750 * 1024) { setAssetError(`${file.name} is over 750 KB. Use a smaller PNG, SVG or JPG.`); continue; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const asset: BrandAsset = {
+          id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          name: file.name.replace(/\.[^.]+$/, ''),
+          type: 'logo',
+          variant: 'primary',
+          url: String(reader.result),
+          size: `${Math.max(1, Math.round(file.size / 1024))} KB`,
+          updatedAt: new Date().toLocaleDateString()
+        };
+        setWorkingAssets(current => [...current, asset]);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const updateAsset = (id: string, patch: Partial<BrandAsset>) =>
+    setWorkingAssets(current => current.map(a => (a.id === id ? { ...a, ...patch } : a)));
+
+  const removeAsset = (id: string) => setWorkingAssets(current => current.filter(a => a.id !== id));
 
   const handleSaveNewVersionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -813,10 +845,23 @@ export const BrandKnowledgePage: React.FC = () => {
               <div>
                 <h3 className="text-base font-bold text-[#12201C]">Official Crest & Asset Library</h3>
                 <p className="text-xs text-[#68756F]">
-                  Approved vector logos, banners, and social media templates.
+                  Approved vector logos, banners, and social media templates. Click Save new version to keep changes.
                 </p>
               </div>
+              {canEditAssets && (
+                <label className="px-4 py-2 rounded-xl bg-[#0A4A3D] hover:bg-[#063028] text-white text-xs font-semibold flex items-center gap-2 cursor-pointer">
+                  <Upload className="w-4 h-4" />
+                  Upload asset
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={handleAssetUpload} />
+                </label>
+              )}
             </div>
+            {assetError && <p className="text-xs text-[#C2413B]">{assetError}</p>}
+            {workingAssets.length === 0 && (
+              <p className="py-6 text-center text-xs text-stone-500 border border-dashed border-stone-200 rounded-xl">
+                No assets yet. Upload your logo, banners or templates (PNG, SVG or JPG, up to 750 KB each).
+              </p>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {workingAssets.map(asset => (
@@ -829,17 +874,48 @@ export const BrandKnowledgePage: React.FC = () => {
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <div className="text-xs font-bold text-[#12201C] truncate">{asset.name}</div>
-                    <div className="flex items-center justify-between text-[11px] text-[#68756F]">
-                      <span className="capitalize">{asset.variant} variant</span>
+                  <div className="space-y-1.5">
+                    {canEditAssets ? (
+                      <input
+                        value={asset.name}
+                        onChange={e => updateAsset(asset.id, { name: e.target.value })}
+                        className="w-full text-xs font-bold text-[#12201C] bg-transparent border-b border-transparent focus:border-stone-300 outline-none"
+                      />
+                    ) : (
+                      <div className="text-xs font-bold text-[#12201C] truncate">{asset.name}</div>
+                    )}
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-[#68756F]">
+                      {canEditAssets ? (
+                        <div className="flex items-center gap-1">
+                          <select value={asset.type} onChange={e => updateAsset(asset.id, { type: e.target.value as BrandAsset['type'] })} className="bg-white border border-stone-200 rounded px-1 py-0.5 capitalize">
+                            <option value="logo">Logo</option>
+                            <option value="template">Template</option>
+                            <option value="graphic">Graphic</option>
+                          </select>
+                          <select value={asset.variant} onChange={e => updateAsset(asset.id, { variant: e.target.value as BrandAsset['variant'] })} className="bg-white border border-stone-200 rounded px-1 py-0.5 capitalize">
+                            <option value="primary">Primary</option>
+                            <option value="monochrome">Monochrome</option>
+                            <option value="light">Light</option>
+                            <option value="dark">Dark</option>
+                          </select>
+                        </div>
+                      ) : (
+                        <span className="capitalize">{asset.variant} variant</span>
+                      )}
                       <span>{asset.size}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-stone-200 text-[10px]">
                     <span className="text-[#167A58] font-bold">✓ Approved</span>
-                    <span className="text-stone-400">{asset.updatedAt}</span>
+                    <span className="flex items-center gap-2">
+                      <a href={asset.url} download={asset.name} className="text-[#0A4A3D] font-semibold hover:underline">Download</a>
+                      {canEditAssets && (
+                        <button onClick={() => removeAsset(asset.id)} className="text-[#C2413B] hover:text-red-700" title="Remove asset">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </span>
                   </div>
                 </div>
               ))}
