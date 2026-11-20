@@ -61,11 +61,14 @@ export const CommentsPage: React.FC = () => {
     } catch (error) { setReplyError(error instanceof Error ? error.message : 'Could not generate a reply.'); }
   };
 
+  const engagement = (c: CommentItem) => Number(c.likes || 0) + 2 * Number(c.replyCount || 0);
+
   const filteredComments = comments.filter(c => {
     if (filterTab === 'needs_reply' && c.status !== 'needs_reply') return false;
     if (filterTab === 'flagged' && c.status !== 'flagged') return false;
     if (filterTab === 'new' && c.status !== 'new') return false;
-    if (filterTab === 'most_engaged' && c.likes < 10) return false;
+    // Any comment with at least one like or reply counts; the list is then ranked by engagement.
+    if (filterTab === 'most_engaged' && engagement(c) < 1) return false;
 
     if (platformFilter !== 'all' && c.platform !== platformFilter) return false;
 
@@ -79,6 +82,7 @@ export const CommentsPage: React.FC = () => {
     }
     return true;
   });
+  if (filterTab === 'most_engaged') filteredComments.sort((a, b) => engagement(b) - engagement(a));
 
   const handleUseReply = async (comment: CommentItem) => {
     const reply = generatedReplies[comment.id] || comment.suggestedReply;
