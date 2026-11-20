@@ -81,7 +81,7 @@ async def register(body: RegisterBody):
     user_id = str(uuid.uuid4())
     workspace_id = (body.workspace_id or "").strip() or str(uuid.uuid4())
     with connect() as db:
-        exists = db.execute("SELECT 1 FROM users WHERE email=?", (body.email,)).fetchone()
+        exists = db.execute("SELECT 1 FROM users WHERE email=?", (body.email.lower(),)).fetchone()
         if exists:
             raise HTTPException(status_code=409, detail="An account with this email already exists.")
         workspace_exists = db.execute("SELECT 1 FROM users WHERE workspace_id=? LIMIT 1", (workspace_id,)).fetchone()

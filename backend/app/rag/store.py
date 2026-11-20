@@ -131,7 +131,7 @@ class SQLiteStore:
 
     def cache_vectors(self, items: dict[str, list[float]]) -> None:
         with connect() as db:
-            db.executemany("INSERT OR REPLACE INTO rag_embedding_cache(hash,vector_json) VALUES(?,?)",
+            db.executemany("INSERT INTO rag_embedding_cache(hash,vector_json) VALUES(?,?) ON CONFLICT(hash) DO UPDATE SET vector_json=excluded.vector_json",
                            [(h, json.dumps(v)) for h, v in items.items()])
 
 

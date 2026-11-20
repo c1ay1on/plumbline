@@ -6,7 +6,7 @@ import json
 import os
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlencode
 
@@ -61,7 +61,7 @@ def pkce_pair() -> tuple[str, str]:
 
 def insert_state(state: str, provider: str, user_id: str, verifier: str | None = None) -> None:
     with connect() as db:
-        db.execute("DELETE FROM oauth_states WHERE datetime(created_at) < datetime('now','-30 minutes')")
+        db.execute("DELETE FROM oauth_states WHERE created_at < ?", ((datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat(),))
         db.execute("INSERT INTO oauth_states(state,provider,user_id,code_verifier,created_at) VALUES(?,?,?,?,?)", (state, provider, user_id, verifier, now()))
 
 
