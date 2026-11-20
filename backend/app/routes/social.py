@@ -479,10 +479,27 @@ async def get_comments(user: dict = Depends(require_user)):
                     comments.append({"id": str(c["id"]), "platform": platform, "accountId": row["account_id"], "postId": c.get("conversation_id", ""), "authorName": "X user", "authorHandle": str(c.get("author_id", "")), "text": c.get("text", ""), "timeReceived": c.get("created_at", ""), "likes": 0, "replyCount": 0})
             elif platform == "youtube":
                 channel_id = metadata.get("channelId") or row["account_id"]
-                data = await request_json("GET", "https://www.googleapis.com/youtube/v3/commentThreads", token=token, params={"part": "snippet,replies", "allThreadsRelatedToChannelId": channel_id, "maxResults": 50, "textFormat": "plainText"})
-                for item in data.get("items", []):
-                    snippet = item["snippet"]["topLevelComment"]["snippet"]
-                    comments.append({"id": item["snippet"]["topLevelComment"]["id"], "platform": platform, "accountId": row["account_id"], "postId": item["snippet"].get("videoId", ""), "authorName": snippet.get("authorDisplayName", "YouTube user"), "authorHandle": "", "text": snippet.get("textDisplay", ""), "timeReceived": snippet.get("publishedAt", ""), "likes": snippet.get("likeCount", 0), "replyCount": item["snippet"].get("totalReplyCount", 0)})
+                # YouTube only returns published comments by default. Comments it holds for review
+                # or marks as likely spam need their own requests, and those arrive pre-flagged.
+                seen: set[str] = set()
+                for status in ("published", "heldForReview", "likelySpam"):
+                    try:
+                        data = await request_json("GET", "https://www.googleapis.com/youtube/v3/commentThreads", token=token, params={"part": "snippet,replies", "allThreadsRelatedToChannelId": channel_id, "maxResults": 50, "textFormat": "plainText", "order": "time", "moderationStatus": status})
+                    except HTTPException:
+                        if status == "published":
+                            raise
+                        continue
+                    for item in data.get("items", []):
+                        comment_id = item["snippet"]["topLevelComment"]["id"]
+                        if comment_id in seen:
+                            continue
+                        seen.add(comment_id)
+                        snippet = item["snippet"]["topLevelComment"]["snippet"]
+                        entry = {"id": comment_id, "platform": platform, "accountId": row["account_id"], "postId": item["snippet"].get("videoId", ""), "authorName": snippet.get("authorDisplayName", "YouTube user"), "authorHandle": snippet.get("authorChannelUrl", "").rsplit("/", 1)[-1] if snippet.get("authorChannelUrl") else "", "text": snippet.get("textDisplay", ""), "timeReceived": snippet.get("publishedAt", ""), "likes": snippet.get("likeCount", 0), "replyCount": item["snippet"].get("totalReplyCount", 0)}
+                        if status != "published":
+                            entry["flagged"] = True
+                            entry["flagReason"] = "YouTube marked this as likely spam" if status == "likelySpam" else "YouTube is holding this for review"
+                        comments.append(entry)
         except HTTPException as exc:
             # Continue showing comments from other connected platforms if one lacks a permission.
             comments.append({"id": f"permission-{platform}", "platform": platform, "postId": "", "authorName": "Connection notice", "authorHandle": "", "text": f"Could not load comments for {PLATFORM_NAMES.get(platform, platform)}: {exc.detail}", "timeReceived": now(), "likes": 0, "replyCount": 0, "notice": True})

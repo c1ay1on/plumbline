@@ -457,11 +457,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         timeReceived: item.timeReceived || new Date().toISOString(),
         likes: Number(item.likes || 0),
         replyCount: Number(item.replyCount || 0),
-        status: item.notice ? 'flagged' : previous?.status || 'needs_reply',
+        status: item.notice || item.flagged ? 'flagged' : previous?.status || 'needs_reply',
         suggestedReply: previous?.suggestedReply || '',
         suggestedReplySource: previous?.suggestedReplySource || '',
         replyDraft: previous?.replyDraft,
-        moderationReason: item.notice ? 'Platform connection or permission notice' : previous?.moderationReason
+        moderationReason: item.notice ? 'Platform connection or permission notice' : item.flagged ? (item.flagReason || 'Flagged by platform') : previous?.moderationReason
       };
     });
     const merged = new Map<string, CommentItem>(existing);
