@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Lock, Mail, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Lock, Mail, ShieldCheck, PlayCircle } from 'lucide-react';
+
+// One-click judge login. Override with VITE_DEMO_EMAIL / VITE_DEMO_PASSWORD if the account changes.
+const DEMO_EMAIL = (import.meta.env.VITE_DEMO_EMAIL as string | undefined) || 'judge@demo.com';
+const DEMO_PASSWORD = (import.meta.env.VITE_DEMO_PASSWORD as string | undefined) || '1234567890';
 import { useAuth } from '../../contexts/AuthContext';
 
 export const LoginPage: React.FC = () => {
@@ -10,6 +14,21 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const [demoLoading, setDemoLoading] = useState(false);
+
+  const handleDemo = async () => {
+    setError('');
+    setDemoLoading(true);
+    try {
+      await login(DEMO_EMAIL, DEMO_PASSWORD);
+      navigate('/app/home');
+    } catch (err) {
+      setError(err instanceof Error ? `Demo login failed: ${err.message}` : 'Demo login failed. Please try again.');
+    } finally {
+      setDemoLoading(false);
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -26,7 +45,15 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-white font-sans">
+    <div className="min-h-screen flex flex-col bg-white font-sans">
+    <div className="sticky top-0 z-50 bg-[#12201C] text-white px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
+      <span className="text-xs sm:text-sm text-emerald-100"><strong className="text-white">Judges:</strong> skip sign-up and explore a fully connected workspace.</span>
+      <button type="button" onClick={handleDemo} disabled={demoLoading || loading}
+        className="shrink-0 inline-flex items-center gap-2 px-4 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-[#12201C] font-extrabold text-sm tracking-wide disabled:opacity-60">
+        <PlayCircle className="w-4 h-4" />{demoLoading ? 'Opening demo…' : 'DEMO'}
+      </button>
+    </div>
+    <div className="flex-1 grid grid-cols-1 lg:grid-cols-12">
       <div className="hidden lg:flex lg:col-span-5 bg-[#0A4A3D] text-white p-12 flex-col justify-between relative overflow-hidden">
         <div className="absolute -right-24 -bottom-24 w-96 h-96 rounded-full border border-emerald-800/40" />
         <div className="relative z-10 flex items-center gap-3">
@@ -61,6 +88,7 @@ export const LoginPage: React.FC = () => {
           <p className="mt-6 text-center text-xs text-[#68756F]">New to Plumbline? <Link to="/register" className="text-[#0A4A3D] font-semibold hover:underline">Create an account</Link></p>
         </div>
       </div>
+    </div>
     </div>
   );
 };
