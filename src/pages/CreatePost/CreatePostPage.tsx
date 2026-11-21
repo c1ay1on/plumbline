@@ -195,6 +195,28 @@ export const CreatePostPage: React.FC = () => {
     setMediaAltText('');
   };
 
+  const SAMPLE_CREATIVES = [
+    { file: 'good-poster.png', label: 'On-brand poster', alt: 'Northwind poster in brand colours with the primary logo and high-contrast headline text.' },
+    { file: 'bad-poster.png', label: 'Off-brand poster', alt: '' },
+  ];
+  const [sampleLoading, setSampleLoading] = useState('');
+
+  const loadSampleCreative = async (sample: { file: string; alt: string }) => {
+    setSampleLoading(sample.file);
+    try {
+      const res = await fetch(`/sample-creatives/${sample.file}`);
+      if (!res.ok) throw new Error(String(res.status));
+      const blob = await res.blob();
+      setMediaAltText(sample.alt);
+      setMediaFile(new File([blob], sample.file, { type: blob.type || 'image/png' }));
+      if (mediaInputRef.current) mediaInputRef.current.value = '';
+    } catch {
+      alert('Could not load the sample image. Please try again.');
+    } finally {
+      setSampleLoading('');
+    }
+  };
+
   const handleAcceptSuggestion = (platform: Platform, sugId: string) => {
     const currentVar = platformVariants[platform];
     if (!currentVar) return;
@@ -415,6 +437,22 @@ export const CreatePostPage: React.FC = () => {
                   Select a file stored on your device
                 </span>
               </label>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-semibold text-stone-500">No image handy? Try a sample:</span>
+                {SAMPLE_CREATIVES.map(sample => (
+                  <button
+                    key={sample.file}
+                    type="button"
+                    onClick={() => void loadSampleCreative(sample)}
+                    disabled={Boolean(sampleLoading)}
+                    className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors disabled:opacity-60 ${mediaFile?.name === sample.file ? 'border-[#0A4A3D] bg-emerald-50 text-[#0A4A3D]' : 'border-stone-200 bg-white hover:bg-stone-50 text-[#12201C]'}`}
+                  >
+                    <img src={`/sample-creatives/${sample.file}`} alt="" className="w-6 h-7 rounded object-cover border border-stone-200" />
+                    {sampleLoading === sample.file ? 'Loading…' : sample.label}
+                  </button>
+                ))}
+              </div>
 
               {mediaFile && mediaPreviewUrl && (
                 <div className="mt-3 rounded-xl border border-stone-200 overflow-hidden">

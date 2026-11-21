@@ -4,6 +4,7 @@ import os
 from fastapi import APIRouter
 
 from app.database.db import connect
+from app.services.groq_client import groq_configured, groq_key, groq_post  # noqa: F401
 
 router = APIRouter(tags=["Health"])
 
@@ -18,7 +19,7 @@ def health_check():
     except Exception:
         database_connected = False
 
-    ai_configured = bool(os.getenv("GROQ_API_KEY", "").strip())
+    ai_configured = groq_configured()
     healthy = database_connected
     return {
         "status": "ok" if healthy else "degraded",

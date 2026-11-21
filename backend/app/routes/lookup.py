@@ -22,6 +22,7 @@ from app.database.db import connect
 from app.routes.auth import require_user
 from app.routes.social import META_VERSION, connection_rows, ensure_fresh_connection
 from app.services.comment_audit import audit_comments
+from app.services.groq_client import groq_configured, groq_key, groq_post  # noqa: F401
 
 router = APIRouter(prefix="/api/lookup", tags=["public lookup"])
 
@@ -90,7 +91,7 @@ async def lookup_status(user: dict = Depends(require_user)):
     return {
         "youtube": bool((os.getenv("YOUTUBE_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()),
         "instagram": _find_instagram_connection(user["id"]) is not None,
-        "ai": bool(os.getenv("GROQ_API_KEY", "").strip()),
+        "ai": groq_configured(),
     }
 
 

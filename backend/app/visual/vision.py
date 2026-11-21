@@ -10,6 +10,7 @@ import os
 import re
 
 import httpx
+from app.services.groq_client import groq_configured, groq_key, groq_post  # noqa: F401
 
 DEFAULT_GROQ_VISION = "qwen/qwen3.8-27b"
 DEFAULT_GEMINI_VISION = "gemini-2.5-flash-lite"
@@ -48,7 +49,7 @@ def _parse(content: str) -> dict:
 
 
 async def _groq(image_url: str, logos: list[dict]) -> tuple[dict, str]:
-    key = os.getenv("GROQ_API_KEY", "").strip()
+    key = groq_key()
     model = os.getenv("GROQ_VISION_MODEL", "").strip() or DEFAULT_GROQ_VISION
     content = [{"type": "text", "text": _prompt(len(logos), [l.get("variant", "") for l in logos])},
                {"type": "image_url", "image_url": {"url": image_url}}]
@@ -57,8 +58,7 @@ async def _groq(image_url: str, logos: list[dict]) -> tuple[dict, str]:
             "messages": [{"role": "user", "content": content}],
             "response_format": {"type": "json_object"}}
     async with httpx.AsyncClient(timeout=60) as client:
-        res = await client.post("https://api.groq.com/openai/v1/chat/completions",
-                                headers={"Authorization": f"Bearer {key}"}, json=body)
+        res = await groq_post(client, json=body)
     if res.status_code == 429:
         raise RuntimeError("Groq rate limit reached for the vision model.")
     if res.is_error:
@@ -94,13 +94,13 @@ async def _gemini(image_url: str, logos: list[dict]) -> tuple[dict, str]:
 
 
 def available() -> bool:
-    return bool(os.getenv("GROQ_API_KEY", "").strip() or os.getenv("GEMINI_API_KEY", "").strip())
+    return bool(groq_key() or os.getenv("GEMINI_API_KEY", "").strip())
 
 
 async def describe(image_url: str, logos: list[dict]) -> tuple[dict, str]:
     """Returns (raw model JSON, provider). Raises RuntimeError when every provider fails."""
     errors = []
-    if os.getenv("GROQ_API_KEY", "").strip():
+    if groq_key():
         try:
             return await _groq(image_url, logos)
         except Exception as exc:  # noqa: BLE001

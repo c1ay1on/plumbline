@@ -22,6 +22,7 @@ from app.rag import embeddings
 from app.rag.chunking import guideline_chunks, sha
 from app.rag.retrieval import applies_to, cosine, draft_queries, hybrid_retrieve
 from app.rag.store import get_store
+from app.services.groq_client import groq_configured, groq_key, groq_post  # noqa: F401
 
 CATEGORIES = {"unsupported_claim", "outdated_info", "tone_mismatch", "terminology",
               "incorrect_messaging", "accessibility", "alt_text_missing"}
@@ -165,7 +166,7 @@ BRAND CONTEXT:
 
 
 async def _groq(system: str, user: str) -> tuple[dict, str]:
-    key = os.getenv("GROQ_API_KEY", "").strip()
+    key = groq_key()
     from app.routes.ai import resolve_model
     model = resolve_model(None)
     body: dict[str, Any] = {
@@ -176,8 +177,7 @@ async def _groq(system: str, user: str) -> tuple[dict, str]:
     if model.startswith("openai/gpt-oss"):
         body["reasoning_effort"] = "low"
     async with httpx.AsyncClient(timeout=60) as client:
-        res = await client.post("https://api.groq.com/openai/v1/chat/completions",
-                                headers={"Authorization": f"Bearer {key}"}, json=body)
+        res = await groq_post(client, json=body)
     if res.status_code == 429:
         raise RuntimeError("Groq rate limit reached; showing rule checks only. Try again in a minute.")
     if res.is_error:
@@ -285,7 +285,7 @@ async def run_audit(ws: str, text: str, platforms: list[str], guidelines: dict,
     rules = rule_findings(text, platforms, g_chunks, guidelines, has_media, alt_text, version)
 
     ai, dropped, provider, ai_error = [], 0, None, None
-    if os.getenv("GROQ_API_KEY", "").strip():
+    if groq_key():
         try:
             raw, model = await _groq(*_prompt(text, platforms, retrieved, has_media, alt_text))
             provider = f"groq:{model}"

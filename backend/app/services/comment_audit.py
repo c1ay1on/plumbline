@@ -12,6 +12,7 @@ import re
 from typing import Any
 
 import httpx
+from app.services.groq_client import groq_configured, groq_key, groq_post  # noqa: F401
 
 LABELS = ("spam", "toxic", "complaint", "question", "praise", "neutral")
 
@@ -113,7 +114,7 @@ def _groq_model() -> str:
 
 async def ai_relabel(items: list[dict[str, Any]], brand_context: str = "") -> dict[str, dict[str, str]]:
     """One Groq call for up to 60 comments. Returns {id: {label, reason}}; {} on any failure."""
-    key = os.getenv("GROQ_API_KEY", "").strip()
+    key = groq_key()
     if not key or not items:
         return {}
     batch = [{"id": i["id"], "text": (i.get("text") or "")[:400]} for i in items[:60]]
@@ -127,10 +128,7 @@ async def ai_relabel(items: list[dict[str, Any]], brand_context: str = "") -> di
     )
     try:
         async with httpx.AsyncClient(timeout=40) as client:
-            r = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {key}"},
-                json={"model": _groq_model(), "messages": [{"role": "user", "content": prompt}], "temperature": 0,
+            r = await groq_post(client, json={"model": _groq_model(), "messages": [{"role": "user", "content": prompt}], "temperature": 0,
                       "max_tokens": 4000, "response_format": {"type": "json_object"}},
             )
         if r.is_error:

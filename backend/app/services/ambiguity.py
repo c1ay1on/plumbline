@@ -15,6 +15,7 @@ from collections import Counter
 from typing import Any
 
 import httpx
+from app.services.groq_client import groq_configured, groq_key, groq_post  # noqa: F401
 
 DISPUTED_STATUSES = {"contested", "rejected"}
 
@@ -311,7 +312,7 @@ def build_fallback_suggestion(rule: dict, reasons: list[str], dispute_count: int
 async def generate_suggestion(rule: dict, reasons: list[str], dispute_count: int, flag_count: int) -> dict:
     """Uses Groq when GROQ_API_KEY is set, otherwise the deterministic fallback."""
     fallback = build_fallback_suggestion(rule, reasons, dispute_count, flag_count)
-    key = os.getenv("GROQ_API_KEY", "").strip()
+    key = groq_key()
     if not key or key == "your_real_groq_api_key":
         return fallback
     from app.routes.ai import resolve_model
@@ -328,10 +329,7 @@ async def generate_suggestion(rule: dict, reasons: list[str], dispute_count: int
     )
     try:
         async with httpx.AsyncClient(timeout=45) as client:
-            response = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                json={"model": model, "temperature": 0.2, "max_tokens": 600,
+            response = await groq_post(client, json={"model": model, "temperature": 0.2, "max_tokens": 600,
                       "response_format": {"type": "json_object"},
                       "messages": [{"role": "user", "content": prompt}]},
             )

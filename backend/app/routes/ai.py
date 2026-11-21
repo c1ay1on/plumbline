@@ -5,6 +5,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from app.routes.auth import require_user
+from app.services.groq_client import groq_configured, groq_key, groq_post  # noqa: F401
 
 # Groq shut these down on 2026-08-16; map old .env values to the recommended replacements.
 RETIRED_MODELS = {"llama-3.3-70b-versatile": "openai/gpt-oss-120b", "llama-3.1-8b-instant": "openai/gpt-oss-20b"}
@@ -26,19 +27,16 @@ class ChatBody(BaseModel):
 
 @router.get("/status")
 async def ai_status(user: dict = Depends(require_user)):
-    return {"configured": bool(os.getenv("GROQ_API_KEY")), "model": resolve_model(None)}
+    return {"configured": groq_configured(), "model": resolve_model(None)}
 
 @router.post("/test")
 async def ai_test(user: dict = Depends(require_user)):
-    key = os.getenv("GROQ_API_KEY", "").strip()
+    key = groq_key()
     model = resolve_model(None)
     if not key:
         raise HTTPException(status_code=503, detail="GROQ_API_KEY is not configured in backend/.env.")
     async with httpx.AsyncClient(timeout=45) as client:
-        response = await client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {key}"},
-            json={"model": model, "messages": [{"role": "user", "content": "Reply with PLUMBLINE_OK"}], "max_tokens": 10},
+        response = await groq_post(client, json={"model": model, "messages": [{"role": "user", "content": "Reply with PLUMBLINE_OK"}], "max_tokens": 10},
         )
     if response.is_error:
         try:
@@ -50,15 +48,12 @@ async def ai_test(user: dict = Depends(require_user)):
 
 @router.post("/chat/completions")
 async def chat_completions(body: ChatBody, user: dict = Depends(require_user)):
-    key = os.getenv("GROQ_API_KEY", "").strip()
+    key = groq_key()
     if not key:
         raise HTTPException(status_code=503, detail="GROQ_API_KEY is not configured in backend/.env.")
     model = resolve_model(body.model)
     async with httpx.AsyncClient(timeout=90) as client:
-        response = await client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            json={"model": model, "messages": body.messages, "temperature": body.temperature, "max_tokens": body.max_tokens, **({"response_format": body.response_format} if body.response_format else {})},
+        response = await groq_post(client, json={"model": model, "messages": body.messages, "temperature": body.temperature, "max_tokens": body.max_tokens, **({"response_format": body.response_format} if body.response_format else {})},
         )
     if response.is_error:
         try:

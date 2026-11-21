@@ -58,25 +58,25 @@ export const Header: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-8">
-            <NavLink to="/app/home" className="flex items-center gap-2.5">
-              <img src="/logo.png" alt="C:/Users/ADMIN/Downloads/WhatsApp .png" className="w-8 h-8 object-contain" />
+      <div className="w-full px-4 sm:px-6">
+        <div className="flex items-center justify-between gap-4 h-16">
+          <div className="flex items-center gap-4 xl:gap-6 min-w-0 flex-1">
+            <NavLink to="/app/home" className="flex items-center gap-2.5 shrink-0 pr-4 border-r border-stone-200">
+              <img src="/logo.png" alt="Plumbline logo" className="w-8 h-8 object-contain" />
               <div className="flex flex-col"><span className="text-xl font-bold text-[#12201C] leading-none">Plumbline</span><span className="text-[10px] text-[#68756F] font-medium">Brand Governance</span></div>
             </NavLink>
-            <nav className="hidden lg:flex items-center gap-1">
+            <nav className="hidden lg:flex items-center gap-0.5 min-w-0 overflow-x-auto [scrollbar-width:none]">
               {navItems.map(item => {
                 const Icon = item.icon;
                 const isActive = location.pathname.startsWith(item.path);
-                return <NavLink key={item.path} to={item.path} className={`relative flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors ${isActive ? 'bg-[#0A4A3D] text-white' : 'text-[#68756F] hover:text-[#12201C] hover:bg-stone-100'}`}>
+                return <NavLink key={item.path} to={item.path} className={`relative flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium rounded-lg whitespace-nowrap shrink-0 transition-colors ${isActive ? 'bg-[#0A4A3D] text-white' : 'text-[#68756F] hover:text-[#12201C] hover:bg-stone-100'}`}>
                   <Icon className="w-4 h-4" /><span>{item.name}</span>{item.badge !== undefined && <span className={`ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full ${isActive ? 'bg-amber-400 text-[#12201C]' : 'bg-amber-100 text-amber-800'}`}>{item.badge}</span>}
                 </NavLink>;
               })}
             </nav>
           </div>
 
-          <div className="hidden lg:flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-3 shrink-0">
             <div className="w-8 h-8 rounded-full bg-emerald-100 text-[#0A4A3D] flex items-center justify-center text-xs font-bold">{initials}</div>
             <div className="max-w-40"><div className="text-xs font-semibold text-[#12201C] truncate">{currentUser.name}</div><div className="text-[10px] text-[#68756F] capitalize">{currentRole}</div></div>
             <button onClick={handleLogout} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50"><LogOut className="w-3.5 h-3.5" /> Sign out</button>
