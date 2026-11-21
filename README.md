@@ -159,6 +159,27 @@ How it works:
 
 **Tests.** From the `backend` folder with the venv active, run `python tests/test_rag.py`. It uses a temporary database and a mocked Groq, and covers upload, parsing, duplicate and bad files, roles, citations, the citation gate, Groq being down, and delete. For the extension, run `node extension/test/pipeline.test.mjs`.
 
+## Visual and accessibility audit (Improvement 2)
+
+When a creator attaches an image or video in Create Post, Plumbline now analyses the creative itself, not just whether alt text exists. For a video it checks the thumbnail frame (1 second in), captured in the browser.
+
+What it checks:
+
+1. **Brand palette.** The creative's dominant colours are extracted and compared with the brand colours in Brand Knowledge, Colours and Fonts, using CIEDE2000 colour distance. White, black and greys are always allowed. If 15% or more of the creative is off-palette, that is a suggestion; 35% or more is a warning.
+2. **WCAG contrast.** For each block of text on the image, Plumbline separates text pixels from background pixels and computes the WCAG 2.1 contrast ratio. AA needs 4.5:1 for normal text and 3:1 for large text. The vision model finds where the text is and reads it. Without a vision key, an edge heuristic estimates the text areas instead.
+3. **Logo usage.** If a PNG or JPG logo is uploaded in Brand Knowledge, Logos and Assets, the vision model compares the logo on the creative with the approved files (variant, recolouring, skew). Plumbline also compares the logo's aspect ratio on the creative with the approved file; more than 15% off counts as distorted. When both checks agree, the finding is critical.
+4. **Alt text draft.** The vision model writes an alt-text suggestion. The creator edits it and clicks **Use as alt text**.
+
+Findings feed the existing 0-100 risk score. Palette and logo findings count under the visual assets weight (25 each), and contrast and alt-text findings count under the accessibility weight (10 each). They are saved with the post and appear in Review. Governance Insights groups disputes under `check:visual_palette`, `check:visual_contrast` and `check:visual_logo`.
+
+**Keys.** The check uses the backend's `GROQ_API_KEY` with the free vision model `qwen/qwen3.8-27b` (`GROQ_VISION_MODEL`). `GEMINI_API_KEY` (`gemini-2.5-flash-lite`) is the fallback. With no key, the palette and contrast checks still run.
+
+**Try it.** `public/sample-creatives/` has `northwind-logo-primary.png`, `good-poster.png` and `bad-poster.png`. Set the colours to Primary `#1F6FEB`, Secondary `#0B1D3A`, Accent `#E0457B` and Background `#FFFFFF`, then upload the logo as a primary logo. In Create Post, attach `good-poster.png`: the only finding should be the alt-text prompt. Then attach `bad-poster.png`: expect an off-palette warning, low-contrast warnings and a logo distortion finding, and the risk score goes up.
+
+**API:** `POST /api/visual/audit` with `{image: dataURL, colors, logos[], altText, guidelineVersion, mediaKind}` returns findings, score, palette, contrast checks, logo result, suggested alt text and meta. `GET /api/visual/status` reports whether a vision model is configured.
+
+**Tests.** From `backend`, run `python tests/test_visual.py`. It runs 38 checks with generated images and a mocked vision model: colour maths, palette, contrast thresholds, the heuristic fallback, logo variant and distortion, alt text, outage fallback, the API and the score weights.
+
 ## Install the Chrome extension (judges)
 
 The extension brings the same grounded audit into post boxes on other websites (X, LinkedIn, Instagram web, Threads, Reddit and more). It works in desktop Chrome or Edge, not in phone apps.
@@ -177,6 +198,8 @@ Without signing in, the extension still runs the rule checks locally. Click **Lo
 Running locally: set Backend URL to `http://localhost:8000` and sign in with a local account.
 
 ## Known test-build limitations
+
+- The visual check reads one image or one video thumbnail frame per post, not every frame of a video. It runs in the web app only; the Chrome extension still checks text. SVG logos are skipped by the logo check (use PNG or JPG).
 
 - Workspace JSON is stored as shared records in a local SQLite database. It is suitable for basic testing but does not provide sophisticated concurrent editing, audit-grade versioning, invitation email delivery, or multi-tenant production hardening.
 - OAuth access tokens are stored server-side in the local SQLite test database without encryption at rest. Do not copy the database into source control or share it.

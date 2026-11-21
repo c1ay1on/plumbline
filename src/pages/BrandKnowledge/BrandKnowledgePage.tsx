@@ -93,7 +93,10 @@ export const BrandKnowledgePage: React.FC = () => {
 
   useEffect(() => {
     if (!ruleParam) { setFocusAlert(null); return; }
-    const tab = ruleParam === 'check:unsupported_claim' ? 'facts' : ruleParam.startsWith('check:') ? 'voice' : 'terminology';
+    const tab = ruleParam === 'check:unsupported_claim' ? 'facts'
+      : ruleParam === 'check:visual_logo' ? 'assets'
+      : ruleParam === 'check:visual_palette' || ruleParam === 'check:visual_contrast' ? 'colors'
+      : ruleParam.startsWith('check:') ? 'voice' : 'terminology';
     setActiveTab(tab);
     let active = true;
     governanceService.loadAlerts(posts, guidelines, true).then(result => {

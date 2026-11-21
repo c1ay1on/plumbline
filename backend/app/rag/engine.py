@@ -249,7 +249,9 @@ def risk_score(findings: list[dict]) -> dict:
     weights = {"unsupported_claim": ("unsupportedClaims", 30), "outdated_info": ("unsupportedClaims", 30),
                "incorrect_messaging": ("messagingViolations", 20), "terminology": ("terminology", 10),
                "accessibility": ("accessibility", 10), "alt_text_missing": ("accessibility", 10),
-               "tone_mismatch": ("toneInconsistencies", 5)}
+               "tone_mismatch": ("toneInconsistencies", 5),
+               "visual_mismatch": ("visualAssets", 25), "wrong_logo": ("visualAssets", 25),
+               "incorrect_colours": ("visualAssets", 25)}
     for f in findings:
         if f.get("status") not in ("open", "contested"):
             continue

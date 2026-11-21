@@ -497,7 +497,7 @@ export interface AmbiguousRuleAlert {
   label: string;
   text: string;
   context: string;
-  editorTab: 'terminology' | 'facts' | 'voice';
+  editorTab: 'terminology' | 'facts' | 'voice' | 'colors' | 'assets';
   bannedTerm: string;
   preferredTerm: string;
   removed?: boolean;
@@ -510,4 +510,42 @@ export interface AmbiguousRuleAlert {
   closedAt?: string | null;
   resolvedVersion?: string | null;
   suggestion?: ClarificationSuggestion | null;
+}
+
+// Improvement 2: visual and accessibility audit of an uploaded creative
+export interface VisualPaletteColour {
+  hex: string;
+  coverage: number; // 0-1 share of the creative
+  status: 'on_palette' | 'off_palette' | 'neutral';
+  nearestBrand: string | null;
+  nearestBrandHex: string | null;
+  deltaE: number | null;
+}
+
+export interface VisualContrastCheck {
+  box: number[];
+  text: string;
+  foreground: string;
+  background: string;
+  ratio: number;
+  required: number;
+  largeText: boolean;
+  passesAA: boolean;
+  source: 'vision' | 'heuristic';
+}
+
+export interface VisualAuditResult {
+  findings: AuditFinding[];
+  score: BrandRiskScore;
+  suggestedAltText: string;
+  palette: { colours: VisualPaletteColour[]; onPalettePct: number; offPalettePct: number; paletteConfigured: boolean };
+  contrast: VisualContrastCheck[];
+  logo: {
+    checked: boolean;
+    approvedLogos: number;
+    skippedLogos: number;
+    result: { present?: boolean; matchesApproved?: boolean | null; variantSeen?: string; distorted?: boolean; issues?: string[] } | null;
+    aspect: { approvedAspect: number; foundAspect: number; differencePct: number; distorted: boolean } | null;
+  };
+  meta: { provider: string | null; aiError: string | null; mediaKind: string; width: number; height: number; textRegionSource: string | null; ms: number };
 }

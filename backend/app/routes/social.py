@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from app.database.db import connect
 from app.routes.auth import require_user
+from app.services.comment_audit import rule_audit
 
 router = APIRouter(prefix="/api/social", tags=["social channels"])
 
@@ -504,6 +505,15 @@ async def get_comments(user: dict = Depends(require_user)):
         except HTTPException as exc:
             # Continue showing comments from other connected platforms if one lacks a permission.
             comments.append({"id": f"permission-{platform}", "platform": platform, "postId": "", "authorName": "Connection notice", "authorHandle": "", "text": f"Could not load comments for {PLATFORM_NAMES.get(platform, platform)}: {exc.detail}", "timeReceived": now(), "likes": 0, "replyCount": 0, "notice": True})
+    # Rule-based auto-flag: spam bait, links, off-platform contact, repeated words, abuse.
+    for c in comments:
+        if c.get("notice") or c.get("flagged"):
+            continue
+        audit = rule_audit(c.get("text", ""))
+        c["auditLabel"] = audit["label"]
+        if audit["flagged"]:
+            c["flagged"] = True
+            c["flagReason"] = f"Auto-flagged as {audit['label']}: " + "; ".join(audit["signals"][:2])
     return sorted(comments, key=lambda c: c.get("timeReceived", ""), reverse=True)
 
 

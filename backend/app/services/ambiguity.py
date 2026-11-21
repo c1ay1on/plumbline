@@ -44,6 +44,21 @@ BUILTIN_CHECKS = {
         "text": "Posts should match the workspace voice and the platform tone rules.",
         "editorTab": "voice",
     },
+    "check:visual_palette": {
+        "label": "Brand palette check",
+        "text": "Most of a creative's colour should come from the brand palette (white, black and greys allowed).",
+        "editorTab": "colors",
+    },
+    "check:visual_contrast": {
+        "label": "WCAG contrast check",
+        "text": "Text on a creative needs 4.5:1 contrast, or 3:1 for large text (WCAG 2.1 AA).",
+        "editorTab": "colors",
+    },
+    "check:visual_logo": {
+        "label": "Logo usage check",
+        "text": "Use an approved logo variant, scaled proportionally and not recoloured or distorted.",
+        "editorTab": "assets",
+    },
 }
 
 VAGUE_WORDS = {

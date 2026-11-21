@@ -17,6 +17,8 @@ from app.routes.ai import router as ai_router
 from app.routes.analytics import router as analytics_router
 from app.routes.governance import router as governance_router
 from app.routes.rag import router as rag_router
+from app.routes.lookup import router as lookup_router
+from app.routes.visual import router as visual_router
 from app.rag.store import get_store
 
 app = FastAPI(
@@ -49,6 +51,8 @@ app.include_router(ai_router)
 app.include_router(analytics_router)
 app.include_router(governance_router)
 app.include_router(rag_router)
+app.include_router(lookup_router)
+app.include_router(visual_router)
 
 @app.on_event("startup")
 def on_startup():

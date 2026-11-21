@@ -1,4 +1,4 @@
-import type { AmbiguousRuleAlert, ApprovalTimeStats, ChangeImpact, GuidelineRulesSnapshot, RuleChange, AuditFinding, BrandRiskScore, GroundedAuditMeta, RulebookDocument } from '../../types';
+import type { AmbiguousRuleAlert, ApprovalTimeStats, ChangeImpact, GuidelineRulesSnapshot, RuleChange, AuditFinding, BrandRiskScore, GroundedAuditMeta, RulebookDocument, VisualAuditResult } from '../../types';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
 const TOKEN_KEY = 'plumbline_access_token';
@@ -137,6 +137,13 @@ class ApiClient {
     return this.request<{ status: string; platform: string; id: string; permalink?: string; dispatchId: string }>(`/api/social/${platform}/publish`, { method: 'POST', body: JSON.stringify(body) });
   }
   getSocialComments() { return this.request<any[]>('/api/social/comments'); }
+  getLookupStatus() { return this.request<{ youtube: boolean; instagram: boolean; ai: boolean }>('/api/lookup/status'); }
+  lookupYouTube(handle: string, ai = true) {
+    return this.request<any>(`/api/lookup/youtube?handle=${encodeURIComponent(handle)}&ai=${ai}`);
+  }
+  lookupInstagram(username: string) {
+    return this.request<any>(`/api/lookup/instagram?username=${encodeURIComponent(username)}`);
+  }
   replyToSocialComment(commentId: string, platform: string, replyText: string, accountId?: string) {
     return this.request<{ status: string }>(`/api/social/comments/${encodeURIComponent(commentId)}/reply`, { method: 'POST', body: JSON.stringify({ platform, reply_text: replyText, account_id: accountId }) });
   }
@@ -175,6 +182,10 @@ class ApiClient {
   getRulebookChunks(id: string) { return this.request<Array<{ id: string; label: string; text: string; page: number | null }>>(`/api/rag/rulebooks/${encodeURIComponent(id)}/chunks`); }
   groundedAudit(body: { text: string; platforms: string[]; guidelines?: unknown; hasMedia?: boolean; mediaAltText?: string }) {
     return this.request<{ findings: AuditFinding[]; score: BrandRiskScore; retrieved: Array<{ id: string; label: string; text: string; score: number | null; source: string }>; meta: GroundedAuditMeta }>('/api/rag/audit', { method: 'POST', body: JSON.stringify(body) });
+  }
+  // Improvement 2: visual and accessibility audit of an uploaded creative
+  visualAudit(body: { image: string; colors?: Record<string, string>; logos?: Array<{ name: string; variant: string; url: string }>; altText?: string; guidelineVersion?: string; mediaKind?: 'image' | 'video' }) {
+    return this.request<VisualAuditResult>('/api/visual/audit', { method: 'POST', body: JSON.stringify(body) });
   }
   getAIStatus() { return this.request<{ configured: boolean; model: string }>('/api/ai/status'); }
   testAI() { return this.request<{ success: boolean; model: string }>('/api/ai/test', { method: 'POST' }); }

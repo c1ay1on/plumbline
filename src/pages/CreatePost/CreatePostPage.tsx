@@ -23,6 +23,9 @@ import { Platform, PostPlatformVariant, AISuggestionItem } from '../../types';
 import { AIAuditEngine } from '../../services/aiAuditService';
 import { groqService } from '../../services/ai/groqService';
 import { BrandRiskScore } from '../../components/common/BrandRiskScore';
+import { VisualAuditPanel } from '../../components/visual/VisualAuditPanel';
+import { runVisualAudit, mergeVisualFindings } from '../../services/visual/visualAudit';
+import type { VisualAuditResult } from '../../types';
 
 export const CreatePostPage: React.FC = () => {
   const navigate = useNavigate();
@@ -75,6 +78,35 @@ export const CreatePostPage: React.FC = () => {
     setAiAuditError('');
   }, [title, caption, selectedPlatforms]);
 
+  // Improvement 2: visual and accessibility check of the uploaded creative
+  const [visualResult, setVisualResult] = useState<(VisualAuditResult & { thumbnail: string }) | null>(null);
+  const [visualLoading, setVisualLoading] = useState(false);
+  const [visualError, setVisualError] = useState('');
+  const visualRun = useRef(0);
+
+  const handleRunVisualAudit = async (file: File | null = mediaFile) => {
+    if (!file) return;
+    const run = ++visualRun.current;
+    setVisualLoading(true);
+    setVisualError('');
+    try {
+      const result = await runVisualAudit(file, guidelines, mediaAltText);
+      if (run === visualRun.current) setVisualResult(result);
+    } catch (error) {
+      if (run === visualRun.current) setVisualError(error instanceof Error ? error.message : 'The visual check failed.');
+    } finally {
+      if (run === visualRun.current) setVisualLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setVisualResult(null);
+    setVisualError('');
+    if (mediaFile) handleRunVisualAudit(mediaFile);
+    else visualRun.current++;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaFile]);
+
   // Run audit engine dynamically on caption
   const localAuditResult = AIAuditEngine.auditContent(
     caption,
@@ -83,7 +115,9 @@ export const CreatePostPage: React.FC = () => {
     Boolean(mediaFile),
     mediaAltText
   );
-  const auditResult = aiAuditResult || { ...localAuditResult, isLiveAi: false };
+  const textAuditResult = aiAuditResult || { ...localAuditResult, isLiveAi: false };
+  // Visual findings feed the same 0-100 score (visual assets + accessibility weights)
+  const auditResult = { ...textAuditResult, ...mergeVisualFindings(textAuditResult.findings, visualResult?.findings, mediaAltText) };
 
   const handleRunGroqAudit = async () => {
     if (!caption.trim()) { setAiAuditError('Add a caption before running the AI audit.'); return; }
@@ -217,7 +251,7 @@ export const CreatePostPage: React.FC = () => {
       creatorRole: currentRole === 'manager' || currentRole === 'owner' || currentRole === 'admin' ? 'Manager' : 'Social Media Creator',
       platforms: selectedPlatforms,
       mediaUrls: [],
-      mediaType: 'image',
+      mediaType: mediaFile?.type.startsWith('video/') ? 'video' : 'image',
       platformVariants,
       status: 'draft',
       brandRiskScore: auditResult.score,
@@ -238,7 +272,7 @@ export const CreatePostPage: React.FC = () => {
       creatorRole: currentRole === 'manager' || currentRole === 'owner' || currentRole === 'admin' ? 'Manager' : 'Social Media Creator',
       platforms: selectedPlatforms,
       mediaUrls: [],
-      mediaType: 'image',
+      mediaType: mediaFile?.type.startsWith('video/') ? 'video' : 'image',
       platformVariants,
       status: 'in_review',
       brandRiskScore: auditResult.score,
@@ -405,8 +439,8 @@ export const CreatePostPage: React.FC = () => {
 
               <p className="mt-2 text-[10px] leading-relaxed text-stone-500">
                 Demo only: media is not uploaded, saved or published.
-                The current AI checks use media presence and alt text only;
-                they do not analyse the actual image or video.
+                The visual check analyses the image (or the video's thumbnail frame) for brand colours,
+                text contrast and logo use, and drafts alt text you can edit.
               </p>
 
               {mediaFile && (
@@ -668,6 +702,16 @@ export const CreatePostPage: React.FC = () => {
               )}
             </div>
           </div>
+
+          <VisualAuditPanel
+            result={visualResult}
+            loading={visualLoading}
+            error={visualError}
+            hasMedia={Boolean(mediaFile)}
+            altText={mediaAltText}
+            onRun={() => handleRunVisualAudit()}
+            onUseAltText={text => setMediaAltText(text)}
+          />
 
           {/* Detailed Brand Risk Breakdown */}
           <div className="bg-white rounded-2xl p-4 border border-stone-200 space-y-3">

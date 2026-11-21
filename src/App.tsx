@@ -17,6 +17,7 @@ import { ChannelsPage } from './pages/Channels/ChannelsPage';
 import { ProfilePage } from './pages/Profile/ProfilePage';
 import { BrandKnowledgePage } from './pages/BrandKnowledge/BrandKnowledgePage';
 import { GovernanceInsightsPage } from './pages/Insights/GovernanceInsightsPage';
+import { LookupPage } from './pages/Lookup/LookupPage';
 
 const ProtectedLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -38,6 +39,7 @@ export const App: React.FC = () => (
             <Route path="review" element={<ReviewQueuePage />} />
             <Route path="review/:submissionId" element={<ReviewDetailPage />} />
             <Route path="comments" element={<CommentsPage />} />
+            <Route path="lookup" element={<LookupPage />} />
             <Route path="growth" element={<GrowthPage />} />
             <Route path="channels" element={<ChannelsPage />} />
             <Route path="profile" element={<ProfilePage />} />
