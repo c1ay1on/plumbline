@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { apiClient } from '../../services/api/client';
 import { TeamManagementPanel } from '../../components/insights/TeamManagementPanel';
+import { WhyThisPage } from '../../components/common/WhyThisPage';
 import type { GovernanceInsights, InsightFilters, Platform } from '../../types';
 
 const BRAND = '#0A4A3D';
@@ -136,6 +137,16 @@ export const GovernanceInsightsPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      <WhyThisPage
+        why="Insights turns every audit and review into evidence. Instead of guessing why posts get sent back, it shows which brand rules are broken most, which teams or platforms struggle, how long approvals take, and which rules are so unclear that people keep disputing them."
+        when={[
+          'Monthly brand-governance reviews: which rules need training, and which need rewriting?',
+          'After updating your brand guidelines: did the error rate actually drop?',
+          'When approvals feel slow: find where drafts wait and who is overloaded.',
+          'Onboarding a new team or agency: see where they go off-brand and coach them early.',
+        ]}
+      />
 
       {/* Filters */}
       <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-plumb-subtle flex flex-wrap items-center gap-3">

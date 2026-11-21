@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScanSearch, Youtube, Instagram, Loader2, ShieldAlert, MessageCircleQuestion, ThumbsUp, Frown, Ban, Minus, ExternalLink, Users, Eye, Film, Heart, MessageSquare, Sparkles, AlertTriangle } from 'lucide-react';
 import { apiClient } from '../../services/api/client';
+import { WhyThisPage } from '../../components/common/WhyThisPage';
 
 type Label = 'spam' | 'toxic' | 'complaint' | 'question' | 'praise' | 'neutral';
 
@@ -76,6 +77,16 @@ export const LookupPage: React.FC = () => {
         </h1>
         <p className="text-sm text-[#68756F] mt-1">Type any public username. No login to that account needed: Plumbline pulls its public data and audits it live.</p>
       </div>
+
+      <WhyThisPage
+        why="Brands rarely work in isolation. Lookup lets you size up any public channel in seconds, without asking its owner to connect anything: how healthy its comment section is, how much spam or abuse it attracts, and how engaged its audience really is."
+        when={[
+          'Vetting a creator or influencer before a collaboration: is their audience real and their comment section safe for your brand?',
+          'Benchmarking a competitor: what questions and complaints are their customers posting that you could answer better?',
+          'Pitching a new client: show them a live audit of their own channel before they sign up.',
+          'Checking a channel before you sponsor or advertise on it.',
+        ]}
+      />
 
       <div className="bg-white rounded-2xl border border-stone-200 shadow-plumb-subtle p-5 space-y-4">
         <div className="flex gap-2">

@@ -39,7 +39,10 @@ export const CreatePostPage: React.FC = () => {
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([
     'linkedin',
     'instagram',
-    'x'
+    'x',
+    'facebook',
+    'threads',
+    'youtube'
   ]);
   const [activePlatformTab, setActivePlatformTab] = useState<Platform>('linkedin');
 
@@ -332,9 +335,23 @@ export const CreatePostPage: React.FC = () => {
           </p>
 
           <p className="mt-2 text-xs leading-relaxed text-amber-900">
+            <strong>Why:</strong> live publishing needs each platform to approve our app for public
+            posting (Meta app review, X's paid API tier, LinkedIn's partner programme). Until then,
+            posting only works for registered test accounts, so we keep this page in review-only
+            mode. Plumbline's job is the step before publishing: catching off-brand copy, risky
+            claims and inaccessible creatives, and routing them for human approval.
+          </p>
+
+          <p className="mt-2 text-xs leading-relaxed text-amber-900">
             Media selected here is previewed locally in this browser only.
             It is not uploaded to the backend or included in saved demo
             records.
+          </p>
+
+          <p className="mt-2 text-xs leading-relaxed text-amber-900">
+            <strong>Why:</strong> creatives often contain unreleased campaigns or client material, so
+            we don't store them on our servers during a demo. Only a downscaled copy (or a video's
+            thumbnail frame) is sent once for the visual brand and accessibility check, and it isn't saved.
           </p>
         </div>
       </section>
@@ -507,7 +524,7 @@ export const CreatePostPage: React.FC = () => {
                   { id: 'instagram', label: 'Instagram', connected: true },
                   { id: 'x', label: 'X (Twitter)', connected: true },
                   { id: 'facebook', label: 'Facebook', connected: true },
-                  { id: 'threads', label: 'Threads (Ext. Req.)', connected: false },
+                  { id: 'threads', label: 'Threads', connected: false },
                   { id: 'youtube', label: 'YouTube', connected: false }
                 ].map(p => {
                   const selected = selectedPlatforms.includes(p.id as Platform);

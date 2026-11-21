@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Activity, BarChart3, ShieldCheck, FileCheck2, MessageSquare, ArrowRight } from 'lucide-react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { Badge } from '../../components/common/Badge';
+import { WhyThisPage } from '../../components/common/WhyThisPage';
 
 export const GrowthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -20,6 +21,15 @@ export const GrowthPage: React.FC = () => {
         </h1>
         <p className="text-sm text-[#68756F] mt-1">Workspace activity is shown below. Social reach, impressions, and follower analytics are not currently fetched from platform APIs.</p>
       </div>
+
+      <WhyThisPage
+        why="Growth is the one-glance health check for the whole workspace: how much content is moving through review, how many brand issues are still open, and which channels are actually connected. It answers 'are we on track?' without opening every post."
+        when={[
+          'Weekly or end-of-campaign check-ins: are drafts getting reviewed and published, or piling up?',
+          'Before a launch: make sure there are no unresolved brand findings and every channel you plan to post to is connected.',
+          'Reporting to a manager or client: a quick snapshot of output and compliance.',
+        ]}
+      />
 
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
