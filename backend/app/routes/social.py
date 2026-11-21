@@ -245,7 +245,7 @@ async def start_connect(platform: str, user: dict = Depends(require_user)):
         if config_id:
             params.update({"config_id": config_id, "override_default_response_type": "true"})
         else:  # classic Facebook Login
-            params["scope"] = "pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement,pages_read_user_content,instagram_basic,instagram_content_publish,instagram_manage_comments"
+            params["scope"] = "pages_show_list,business_management,pages_read_engagement,pages_manage_posts,pages_manage_engagement,pages_read_user_content,instagram_basic,instagram_content_publish,instagram_manage_comments"
         url = f"https://www.facebook.com/{META_VERSION}/dialog/oauth?" + urlencode(params)
         insert_state(state, "meta", user["id"])
     elif platform == "threads":
