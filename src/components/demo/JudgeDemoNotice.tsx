@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Info, X, FlaskConical } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-
-const DEMO_EMAIL = ((import.meta.env.VITE_DEMO_EMAIL as string | undefined) || 'judge@demo.com').toLowerCase();
-const SEEN_KEY = 'plumbline_judge_notice_seen';
+import { JUDGE_NOTICE_CLOSED_EVENT, JUDGE_NOTICE_SEEN_KEY as SEEN_KEY, isJudgeEmail, openDemoTour } from './demoTourEvents';
 
 /** Shown only to the judge demo account: explains the test-account setup once per session, then stays as a slim bar. */
 export const JudgeDemoNotice: React.FC = () => {
   const { currentUser } = useAuth();
-  const isJudge = (currentUser.email || '').toLowerCase() === DEMO_EMAIL;
+  const isJudge = isJudgeEmail(currentUser.email);
   const [modalOpen, setModalOpen] = useState(false);
   const [barHidden, setBarHidden] = useState(false);
 
@@ -18,7 +16,8 @@ export const JudgeDemoNotice: React.FC = () => {
 
   if (!isJudge) return null;
 
-  const close = () => { sessionStorage.setItem(SEEN_KEY, '1'); setModalOpen(false); };
+  const close = () => { sessionStorage.setItem(SEEN_KEY, '1'); setModalOpen(false); window.dispatchEvent(new CustomEvent(JUDGE_NOTICE_CLOSED_EVENT)); };
+  const closeAndTour = () => { close(); window.setTimeout(openDemoTour, 300); };
 
   return (
     <>
@@ -42,7 +41,11 @@ export const JudgeDemoNotice: React.FC = () => {
               <p><strong>Please don't connect your own social accounts.</strong> Meta and Google only let an app access accounts that are registered as testers until the app passes their review. Our review request was rejected for now, so we added our accounts as testers instead. A personal account will be refused at the consent screen.</p>
               <p>Nothing you do here posts publicly. Create Post saves internal drafts only. <strong>Account Lookup</strong> works on any public YouTube channel or Instagram business account, no connection needed, so that's the best place to try your own examples.</p>
             </div>
-            <button onClick={close} className="w-full py-2.5 rounded-xl bg-[#0A4A3D] hover:bg-[#063028] text-white font-semibold text-sm">Got it, explore the demo</button>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button onClick={closeAndTour} className="flex-1 py-2.5 rounded-xl bg-[#0A4A3D] hover:bg-[#063028] text-white font-semibold text-sm">Start the guided tour (3 min)</button>
+              <button onClick={close} className="flex-1 py-2.5 rounded-xl border border-stone-200 hover:bg-stone-50 text-[#12201C] font-semibold text-sm">Explore on my own</button>
+            </div>
+            <p className="text-[11px] text-stone-500 text-center">You can replay the tour anytime from “Watch demo” in the top bar.</p>
           </div>
         </div>
       )}

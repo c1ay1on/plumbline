@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { groqService } from '../../services/ai/groqService';
 import { GroqSettingsModal } from './GroqSettingsModal';
+import { WatchDemoButton } from '../demo/WatchDemoButton';
 
 export const Header: React.FC = () => {
   const { currentUser, currentRole, backendHealth, logout } = useAuth();
@@ -47,6 +48,7 @@ export const Header: React.FC = () => {
           <span className="hidden sm:inline text-stone-400">Brand guidelines: <strong className="text-emerald-400 font-medium">{guidelines.version || 'Not configured'}</strong></span>
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          <WatchDemoButton />
           <button onClick={() => setGroqModalOpen(true)} className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-semibold ${groqConfig.isActive ? 'bg-emerald-950 text-emerald-300 border border-emerald-700' : 'bg-stone-800 text-stone-300 border border-stone-700'}`} title="Check Groq configuration">
             <Sparkles className="w-3 h-3" /><span>{groqConfig.isActive ? `AI: ${groqConfig.model}` : 'AI not configured'}</span>
           </button>

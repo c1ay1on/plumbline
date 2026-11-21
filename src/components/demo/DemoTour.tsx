@@ -15,7 +15,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { getTourScenes, sceneDuration, TourScene } from './tourScenes';
 import { useNarration } from './useNarration';
-import { OPEN_DEMO_TOUR_EVENT, demoSeenKey } from './demoTourEvents';
+import { OPEN_DEMO_TOUR_EVENT, demoSeenKey, isJudgeEmail } from './demoTourEvents';
 import './demoTour.css';
 
 interface SpotRect { top: number; left: number; width: number; height: number }
@@ -42,7 +42,8 @@ export const DemoTour: React.FC = () => {
   const narration = useNarration();
 
   const firstName = (currentUser?.name || '').trim().split(/\s+/)[0] || '';
-  const scenes = useMemo(() => getTourScenes(currentRole, firstName), [currentRole, firstName]);
+  const isJudge = isJudgeEmail(currentUser?.email);
+  const scenes = useMemo(() => getTourScenes(currentRole, isJudge ? '' : firstName, isJudge), [currentRole, firstName, isJudge]);
   const durations = useMemo(() => scenes.map(sceneDuration), [scenes]);
   const totalMs = useMemo(() => durations.reduce((a, b) => a + b, 0), [durations]);
 
@@ -100,13 +101,15 @@ export const DemoTour: React.FC = () => {
   useEffect(() => {
     if (open || autoOpenedRef.current || !isAuthenticated || !userKey) return;
     if (location.pathname !== AUTO_OPEN_PATH) return;
+    // The judge account gets its own welcome popup, which offers the tour itself.
+    if (isJudgeEmail(currentUser?.email)) return;
     let seen = false;
     try { seen = Boolean(localStorage.getItem(demoSeenKey(userKey))); } catch { seen = true; }
     if (seen) return;
     autoOpenedRef.current = true;
     const t = window.setTimeout(() => openTour(0), 900);
     return () => window.clearTimeout(t);
-  }, [open, isAuthenticated, userKey, location.pathname, openTour]);
+  }, [open, isAuthenticated, userKey, location.pathname, openTour, currentUser?.email]);
 
   // ---------- scene navigation ----------
   const goTo = useCallback((next: number) => {

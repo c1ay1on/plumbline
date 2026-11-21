@@ -14,7 +14,11 @@ import {
   Sparkles,
   Puzzle,
   PlayCircle,
-  Rocket
+  Rocket,
+  ScanSearch,
+  Image as ImageIcon,
+  Palette,
+  FlaskConical
 } from 'lucide-react';
 import type { UserRole } from '../../types';
 
@@ -59,11 +63,11 @@ const byText = (selector: string, text: string) => () =>
 const cardOf = (selector: string, text: string, ancestor: string) => () =>
   byText(selector, text)()?.closest(ancestor) || null;
 
-export function getTourScenes(role: UserRole, firstName: string): TourScene[] {
+export function getTourScenes(role: UserRole, firstName: string, isJudge = false): TourScene[] {
   const isEmployee = role === 'employee';
   const canEditRules = role === 'owner' || role === 'admin' || role === 'manager';
   const reviewLabel = isEmployee ? 'My Submissions' : 'Review & Approvals';
-  const hello = firstName ? `Welcome, ${firstName}` : 'Welcome to Plumbline';
+  const hello = isJudge ? 'Welcome, judges' : firstName ? `Welcome, ${firstName}` : 'Welcome to Plumbline';
 
   return [
     {
@@ -73,7 +77,7 @@ export function getTourScenes(role: UserRole, firstName: string): TourScene[] {
       summary:
         'Plumbline makes sure every post is true to your brand before it goes live: AI drafts and audits the copy against your own rulebooks with cited evidence, a human signs it off, and only then does it reach your channels.',
       steps: [
-        'This short demo walks through every tab in the top navigation, plus the new governance features.',
+        'This short demo walks through every tab in the top navigation, including Account Lookup, the visual brand check and the new Logos, Colours and spam tools.',
         'Each scene highlights the real tab or card and tells you exactly what to do there.',
         'Use Space to pause, ← → to move between scenes, and Esc to leave at any time.'
       ],
@@ -82,6 +86,24 @@ export function getTourScenes(role: UserRole, firstName: string): TourScene[] {
       route: '/app/home',
       hero: true
     },
+    ...(isJudge ? [{
+      id: 'judge',
+      label: 'About this demo account',
+      title: 'This workspace runs on our test accounts',
+      summary:
+        'The YouTube channel, Facebook Page, Instagram and Threads accounts connected here belong to our team. Meta and Google only let an app reach accounts registered as testers until it passes their app review, and ours was rejected for now, so we registered our own accounts as testers.',
+      steps: [
+        'Everything in Comments and Channels is live data from those test accounts.',
+        'Please don’t connect a personal account: the platform will refuse it at the consent screen.',
+        'Want to try your own examples? Account Lookup audits any public YouTube channel, no connection needed.'
+      ],
+      note: 'Nothing here posts publicly. Create post saves internal drafts only.',
+      narration:
+        'A quick note for judges. The social accounts connected here are our own test accounts, because platform app review is still pending. Please don’t connect a personal account. To try your own examples, use Account Lookup.',
+      icon: FlaskConical,
+      route: '/app/channels',
+      target: () => document.querySelector('main h1')
+    } as TourScene] : []),
     {
       id: 'home',
       label: 'Home',
@@ -145,9 +167,9 @@ export function getTourScenes(role: UserRole, firstName: string): TourScene[] {
       label: 'Create post',
       title: 'Create post: draft once, audit with evidence',
       summary:
-        'Write one master draft, let AI adapt it per platform, and run a grounded audit: every flag cites the exact rulebook passage or Brand Knowledge rule behind it. Nothing is published from this page.',
+        'Write one master draft, let AI adapt it per platform, and run a grounded audit: every flag cites the exact rulebook passage or Brand Knowledge rule behind it. The page is review-only: live posting needs each platform’s app approval, so nothing is published from here.',
       steps: [
-        'Write a title and the master caption, add the campaign, and pick target channels (LinkedIn, Instagram, X…).',
+        'Write a title and the master caption and add the campaign. All six channels are selected by default; untick any you don’t need.',
         'Click “Generate with Groq” for platform variants, then Accept or Reject each suggestion.',
         'Hit “Run grounded audit”, open “Show cited rules” on each finding, then “Send for approval to manager” (or Save as draft).'
       ],
@@ -158,6 +180,24 @@ export function getTourScenes(role: UserRole, firstName: string): TourScene[] {
       route: '/app/create',
       target: navItem('/app/create'),
       tab: true
+    },
+    {
+      id: 'visual',
+      label: 'Visual brand check',
+      title: 'Check the creative, not just the caption',
+      summary:
+        'Upload an image or video and Plumbline checks it against your brand: palette match, text contrast (WCAG), whether your logo is present and correct, and whether the alt text actually describes the image.',
+      steps: [
+        'Click “Upload media from your device” and pick an image or a short video.',
+        'Add a media description / alt text. Missing or vague alt text is flagged.',
+        'Read the visual findings next to the copy findings. They merge into the same audit and approval flow.'
+      ],
+      note: 'Media is previewed in your browser. Only a downscaled copy is sent once for the check, and it isn’t stored.',
+      narration:
+        'Plumbline also checks the creative itself. Upload an image or video and it checks your colours, text contrast, logo use and alt text, and adds those findings to the same audit.',
+      icon: ImageIcon,
+      route: '/app/create',
+      target: () => byText('main label', 'Upload media from your device')()?.closest('div') || null
     },
     {
       id: 'review',
@@ -195,13 +235,33 @@ export function getTourScenes(role: UserRole, firstName: string): TourScene[] {
       steps: [
         'Click “Sync live comments” to pull in conversations from your connected accounts.',
         'Pick a comment and “Generate draft” for a fact-grounded reply that cites its source rule.',
-        'Edit if needed and “Send reply”, or flag spam or harassment inside the workspace.'
+        'Edit if needed and “Send reply”. Spam, scam links and abuse are auto-flagged on sync, and “Most Engaged” ranks by likes plus replies.'
       ],
+      note: 'YouTube comments held for review or marked likely spam are pulled in too, so nothing slips past moderation.',
       narration:
         'Comments brings conversations from your connected accounts into one place. Sync them, generate a reply grounded in verified facts, edit it, and send, or flag anything that needs moderation.',
       icon: MessageSquare,
       route: '/app/comments',
       target: navItem('/app/comments'),
+      tab: true
+    },
+    {
+      id: 'lookup',
+      label: 'Lookup',
+      title: 'Account Lookup: audit any public channel',
+      summary:
+        'Type any public YouTube channel or Instagram business username. No connection needed: Plumbline pulls its latest videos and top comments and scores them for toxicity, spam, complaints, questions and praise, with an overall comment health score.',
+      steps: [
+        'Pick YouTube, paste a handle such as @mkbhd, and click “Audit”.',
+        'Read the health score and the breakdown, then open a video to see which comments were flagged and why.',
+        'Use it to vet a creator before a collaboration, benchmark a competitor, or pitch a client with their own audit.'
+      ],
+      note: isJudge ? 'This is the best place to try your own examples as a judge.' : 'Instagram lookups show public counts via Business Discovery and need a connected professional account.',
+      narration:
+        'Account Lookup audits any public channel, no login needed. Paste a YouTube handle to get a comment health score, and see the spam, abuse, complaints and questions under its latest videos.',
+      icon: ScanSearch,
+      route: '/app/lookup',
+      target: navItem('/app/lookup'),
       tab: true
     },
     {
@@ -244,7 +304,7 @@ export function getTourScenes(role: UserRole, firstName: string): TourScene[] {
         'Use “Open review queue” to clear what is still pending.',
         'Use “Manage connections” to add the accounts you want covered.'
       ],
-      note: 'Reach and follower analytics are not pulled from platform APIs yet, so no sample numbers are shown.',
+      note: 'Open “Why use this page” at the top for when it helps. Reach and follower analytics are not pulled from platform APIs yet, so no sample numbers are shown.',
       narration:
         'Growth is a quick health check: unresolved and resolved findings, the review queue, and your connected accounts.',
       icon: TrendingUp,
@@ -258,11 +318,18 @@ export function getTourScenes(role: UserRole, firstName: string): TourScene[] {
       title: 'Channels: connect your accounts securely',
       summary:
         'Authorise the social accounts you manage through each platform’s official OAuth flow. Plumbline never asks for or stores your social passwords.',
-      steps: [
+      steps: isJudge ? [
+        'Each card shows the team test account connected to it and its status.',
+        'Use Refresh connections to re-check the tokens.',
+        'Please leave Connect alone: personal accounts are refused until our app review passes.'
+      ] : [
         'Find the platform card and click Connect.',
         'Sign in and approve the permissions on the official platform page (2-step codes are entered there).',
         'Return here to see the account on its card. Use Refresh connections or Disconnect anytime.'
       ],
+      note: isJudge
+        ? 'The accounts shown are our registered test accounts. Personal accounts can’t connect until platform app review passes.'
+        : 'Until platform app review passes, only accounts registered as testers on our developer apps can connect.',
       narration:
         'Channels is where you connect your social accounts. Click connect, approve access on the official platform page, and come back. Plumbline never sees your password.',
       icon: Share2,
@@ -288,6 +355,24 @@ export function getTourScenes(role: UserRole, firstName: string): TourScene[] {
       route: '/app/brand-knowledge',
       target: navItem('/app/brand-knowledge'),
       tab: true
+    },
+    {
+      id: 'brand-visuals',
+      label: 'Colours and Logos',
+      title: 'Colours, fonts and logos the visual check uses',
+      summary:
+        'Set your official palette and fonts, and keep every approved logo and asset in one library. The visual brand check on Create post compares creatives against exactly these.',
+      steps: [
+        'In “Colours and Fonts”, set primary, secondary, accent and background colours.',
+        'In “Logos and Assets”, upload logos, rename them, set the type and variant (light, dark, mono), or download them.',
+        'Save a new version so audits use the updated palette and assets.'
+      ],
+      narration:
+        'Colours and Fonts and Logos and Assets hold your official palette and logos. The visual brand check compares every creative against them.',
+      icon: Palette,
+      route: '/app/brand-knowledge',
+      target: byText('main button', 'Logos and Assets'),
+      onEnter: () => (byText('main button', 'Logos and Assets')() as HTMLElement | null)?.click()
     },
     {
       id: 'rulebooks',
@@ -359,10 +444,11 @@ export function getTourScenes(role: UserRole, firstName: string): TourScene[] {
         canEditRules
           ? 'Upload a rulebook and set up your voice, terms and facts in Brand Knowledge.'
           : 'Check your voice, terms and facts in Brand Knowledge.',
-        'Create a post, generate platform variants and run the grounded audit.',
+        'Create a post with an image, generate platform variants and run the grounded and visual audit.',
         isEmployee
           ? 'Send it for approval, track it in My Submissions, and watch your trend in Insights.'
-          : 'Send it for approval, sign it off in Review & Approvals, then track it all in Insights.'
+          : 'Send it for approval, sign it off in Review & Approvals, then track it all in Insights.',
+        'Audit any public channel in Lookup to see the comment health score.'
       ],
       note: 'Replay this demo anytime with the “Watch demo” button in the top bar.',
       narration:
