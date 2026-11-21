@@ -68,8 +68,6 @@ def insert_state(state: str, provider: str, user_id: str, verifier: str | None =
 def consume_state(state: str, provider: str) -> dict:
     with connect() as db:
         row = db.execute("SELECT * FROM oauth_states WHERE state=? AND provider=?", (state, provider)).fetchone()
-        if row:
-            db.execute("DELETE FROM oauth_states WHERE state=?", (state,))
     if not row:
         raise HTTPException(status_code=400, detail="OAuth state is invalid or expired. Please try connecting again.")
     created = datetime.fromisoformat(row["created_at"])
@@ -318,12 +316,13 @@ async def oauth_callback(platform: str, code: str | None = None, state: str | No
         client_id, client_secret, redirect_uri = config_for("threads")
         token_data = await request_json("POST", "https://graph.threads.net/oauth/access_token", data={"client_id": client_id, "client_secret": client_secret, "grant_type": "authorization_code", "redirect_uri": redirect_uri, "code": code})
         short_token = token_data["access_token"]
-        long_data = await request_json("GET", f"{graph_base}/oauth/access_token", params={
-            "grant_type": "fb_exchange_token", "client_id": client_id,
-            "client_secret": client_secret, "fb_exchange_token": user_token})
-        user_token = long_data.get("access_token", user_token)
+        try:
+            long_data = await request_json("GET", "https://graph.threads.net/access_token", params={
+                "grant_type": "th_exchange_token", "client_secret": client_secret, "access_token": short_token})
+        except Exception:
+            long_data = {}
         token = long_data.get("access_token", short_token)
-        expires_at = token_expiry(long_data)
+        expires_at = token_expiry(long_data) if long_data.get("access_token") else token_expiry(token_data)
         profile = await request_json("GET", "https://graph.threads.net/v1.0/me", token=token, params={"fields": "id,username,name"})
         user_id_remote = str(profile["id"])
         upsert_connection(user_id, "threads", user_id_remote, profile.get("name") or profile.get("username") or "Threads Account", "@" + profile.get("username", ""), token, None, expires_at, {"threadsUserId": user_id_remote, "capabilities": ["Publish text posts"], "notes": "Threads publishing is enabled. Comment retrieval/replies are not implemented in this test build."})
@@ -356,6 +355,8 @@ async def oauth_callback(platform: str, code: str | None = None, state: str | No
         snippet = item.get("snippet", {})
         upsert_connection(user_id, "youtube", str(item["id"]), snippet.get("title", "YouTube channel"), "", token, token_data.get("refresh_token"), token_expiry(token_data), {"channelId": str(item["id"]), "capabilities": ["Read and reply to video comments"], "notes": "YouTube Data API does not support publishing text-only community posts."})
 
+    with connect() as db:
+        db.execute("DELETE FROM oauth_states WHERE state=?", (state,))
     return RedirectResponse(f"{FRONTEND_URL}/app/channels?connected={platform}")
 
 
